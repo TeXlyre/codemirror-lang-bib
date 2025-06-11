@@ -27,7 +27,7 @@
   font-style: italic;
 }
 
-/* Entry keys (citation keys) - NEW DISTINCT COLOR */
+/* Entry keys (citation keys) */
 .cm-atom {
   color: #0366d6;
   font-weight: bold;
@@ -36,19 +36,19 @@
   border-radius: 3px;
 }
 
-/* Field names - NEW DISTINCT COLOR */
-.cm-property {
-  color: #e36209;
-  font-weight: 600;
-}
-
-/* Legacy field name selector for compatibility */
+/* Field names */
 .cm-propertyName {
   color: #e36209;
   font-weight: 600;
 }
 
-/* String values */
+/* Legacy field name selector for compatibility */
+.cm-property {
+  color: #e36209;
+  font-weight: 600;
+}
+
+/* String values - field content */
 .cm-string {
   color: #032f62;
 }
@@ -61,6 +61,12 @@
 /* Variable references */
 .cm-variableName {
   color: #6f42c1;
+}
+
+/* Quote marks */
+.cm-quote {
+  color: #d73a49;
+  font-weight: bold;
 }
 
 /* Operators and punctuation */
@@ -80,10 +86,6 @@
 .cm-brace {
   color: #24292e;
   font-weight: bold;
-}
-
-.cm-quote {
-  color: #032f62;
 }
 
 /* LaTeX and math highlighting */

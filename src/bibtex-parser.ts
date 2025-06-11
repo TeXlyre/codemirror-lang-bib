@@ -113,18 +113,20 @@ const bibtexLanguage = {
     if (stream.match(/^@([a-zA-Z]+)/)) {
       state.inEntry = true;
       state.entryType = stream.current().substring(1).toLowerCase();
-      return 'keyword';
+      state.inField = false;
+      state.inValue = false;
+      return 'definitionKeyword';
     }
 
-    // Entry key
-    if (state.inEntry && !state.inField && stream.match(/^[a-zA-Z0-9_:.-]+/)) {
+    // Entry key (citation key) - only immediately after entry type and opening brace
+    if (state.inEntry && !state.inField && !state.inValue && stream.match(/^[a-zA-Z0-9_:.-]+/)) {
       return 'atom';
     }
 
-    // Field names
-    if (state.inEntry && stream.match(/^[a-zA-Z_][a-zA-Z0-9_]*/)) {
+    // Field names - only when we're in an entry but not already in a field
+    if (state.inEntry && !state.inValue && stream.match(/^[a-zA-Z_][a-zA-Z0-9_]*/)) {
       state.inField = true;
-      return 'property';
+      return 'propertyName';
     }
 
     // Operators
@@ -180,7 +182,7 @@ const bibtexLanguage = {
           state.valueType = 'quoted';
         }
       }
-      return 'string';
+      return 'quote';
     }
 
     // String values
@@ -205,12 +207,12 @@ const bibtexLanguage = {
       }
     }
 
-    // Numbers
+    // Numbers (only when in value context)
     if (state.inValue && stream.match(/^\d+/)) {
       return 'number';
     }
 
-    // Variable references
+    // Variable references (only when in value context)
     if (state.inValue && stream.match(/^[a-zA-Z_][a-zA-Z0-9_]*/)) {
       return 'variableName';
     }
