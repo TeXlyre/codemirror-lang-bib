@@ -30,11 +30,12 @@ h1 {
   padding: 10px;
   background-color: #f0f0f0;
   border-bottom: 1px solid #ddd;
+  flex-wrap: wrap;
 }
 
 button {
   padding: 6px 12px;
-  background-color: #4CAF50;
+  background-color: #6f42c1;
   color: white;
   border: none;
   border-radius: 4px;
@@ -42,7 +43,7 @@ button {
 }
 
 button:hover {
-  background-color: #45a049;
+  background-color: #5a36a3;
 }
 
 #editor {
@@ -56,13 +57,19 @@ button:hover {
   background-color: white;
   border: 1px solid #ddd;
   border-radius: 4px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 15px;
 }
 
 .options label {
-  margin-right: 15px;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
 }
 
-/* LaTeX specific styles - will use what's in your extension */
+/* BibTeX specific styles - will use what's in the extension */
 .cm-content {
   padding: 10px;
 }

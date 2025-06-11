@@ -5,58 +5,74 @@ import { searchKeymap, highlightSelectionMatches } from '@codemirror/search';
 import {completionKeymap} from '@codemirror/autocomplete';
 import { syntaxHighlighting, defaultHighlightStyle } from '@codemirror/language';
 
-// Import the LaTeX extension - webpack will resolve this from the parent directory
-import { latex } from '../../../dist';
-import '../../../dist/latex.css';
+// Import the BibTeX extension - webpack will resolve this from the parent directory
+import { bibtex } from '../../../dist';
+import '../../../dist/bib.css';
 import './styles.css';
 
-// Example LaTeX document
-const initialDoc = `\\documentclass{article}
-\\usepackage{amsmath}
-\\usepackage{graphicx}
+// Example BibTeX document
+const initialDoc = `@article{sample2023,
+  author = {John Doe and Jane Smith},
+  title = {A Comprehensive Study of Bibliography Management},
+  journal = {Journal of Academic Writing},
+  year = {2023},
+  volume = {15},
+  number = {3},
+  pages = {42--58},
+  doi = {10.1234/jaw.2023.15.3.42},
+  url = {https://example.com/article},
+  note = {Open access article}
+}
 
-\\title{Example Document}
-\\author{Your Name}
-\\date{\\today}
+@book{bibliography2022,
+  author = {Alice Johnson},
+  title = {Modern Bibliography and Citation Management},
+  publisher = {Academic Press},
+  year = {2022},
+  edition = {3rd},
+  address = {New York, NY},
+  isbn = {978-1-234567-89-0},
+  series = {Digital Humanities Series},
+  volume = {7}
+}
 
-\\begin{document}
+@inproceedings{conference2023,
+  author = {Bob Wilson and Carol Davis},
+  title = {Automated Bibliography Generation in Academic Writing},
+  booktitle = {Proceedings of the International Conference on Digital Libraries},
+  year = {2023},
+  pages = {123--130},
+  organization = {ACM},
+  address = {San Francisco, CA},
+  month = {jul},
+  publisher = {ACM Press}
+}
 
-\\maketitle
+@online{website2023,
+  author = {Tech Company},
+  title = {Documentation for Bibliography Tools},
+  url = {https://docs.example.com/bibliography},
+  urldate = {2023-12-01},
+  year = {2023},
+  note = {Comprehensive guide to bibliography management}
+}
 
-\\section{Introduction}
-This is a sample document to demonstrate the LaTeX language support in CodeMirror 6.
-
-\\subsection{Math Example}
-Let's include some math: $E = mc^2$
-
-Also, we can use display math:
-\\begin{equation}
-  f(x) = \\int_{-\\infty}^{\\infty} \\hat{f}(\\xi)\\,e^{2 \\pi i \\xi x} \\,d\\xi
-\\end{equation}
-
-\\subsection{Lists}
-\\begin{itemize}
-  \\item First item
-  \\item Second item with \\textbf{bold text}
-  \\item Third item with \\textit{italic text}
-\\end{itemize}
-
-\\section{Figures}
-\\begin{figure}[htbp]
-  \\centering
-  \\includegraphics[width=0.7\\textwidth]{example-image}
-  \\caption{Example figure}
-  \\label{fig:example}
-\\end{figure}
-
-\\end{document}`;
+@phdthesis{thesis2022,
+  author = {David Brown},
+  title = {Advances in Digital Bibliography Systems},
+  school = {University of Technology},
+  year = {2022},
+  address = {Boston, MA},
+  month = {sep},
+  type = {PhD dissertation}
+}`;
 
 // Initialize the editor
 let currentOptions = {
-  autoCloseTags: true,
   enableLinting: true,
   enableTooltips: true,
-  autoCloseBrackets: false  // Disable auto-closing brackets as it interferes with with autoclosetags
+  enableAutocomplete: true,
+  autoCloseBrackets: true
 };
 
 function createEditor() {
@@ -73,17 +89,17 @@ function createEditor() {
       ...completionKeymap
     ]),
 
-    // Line wrapping is helpful for LaTeX
+    // Line wrapping is helpful for BibTeX
     EditorView.lineWrapping
   ];
 
-  // Add the LaTeX language support with current options
+  // Add the BibTeX language support with current options
   try {
-    const latexExtension = latex(currentOptions);
-    extensions.push(latexExtension);
+    const bibtexExtension = bibtex(currentOptions);
+    extensions.push(bibtexExtension);
   } catch (error) {
-    console.error("Failed to load LaTeX extension:", error);
-    // Continue with basic editor if LaTeX extension fails
+    console.error("Failed to load BibTeX extension:", error);
+    // Continue with basic editor if BibTeX extension fails
   }
 
   const state = EditorState.create({
@@ -103,11 +119,6 @@ document.addEventListener('DOMContentLoaded', () => {
   let editorView = createEditor();
 
   // Handle option changes
-  document.getElementById('autoCloseTags').addEventListener('change', e => {
-    currentOptions.autoCloseTags = e.target.checked;
-    recreateEditor();
-  });
-
   document.getElementById('enableLinting').addEventListener('change', e => {
     currentOptions.enableLinting = e.target.checked;
     recreateEditor();
@@ -115,6 +126,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
   document.getElementById('enableTooltips').addEventListener('change', e => {
     currentOptions.enableTooltips = e.target.checked;
+    recreateEditor();
+  });
+
+  document.getElementById('enableAutocomplete').addEventListener('change', e => {
+    currentOptions.enableAutocomplete = e.target.checked;
     recreateEditor();
   });
 
@@ -140,16 +156,20 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // Toolbar button actions
-  document.getElementById('insertSection').addEventListener('click', () => {
-    insertSnippet('\\section{New Section}\n');
+  document.getElementById('insertArticle').addEventListener('click', () => {
+    insertSnippet('@article{key,\n  author = {Author Name},\n  title = {Article Title},\n  journal = {Journal Name},\n  year = {2023},\n  volume = {1},\n  pages = {1--10}\n}\n\n');
   });
 
-  document.getElementById('insertEnvironment').addEventListener('click', () => {
-    insertSnippet('\\begin{itemize}\n\t\\item New Item\n\\end{itemize}\n');
+  document.getElementById('insertBook').addEventListener('click', () => {
+    insertSnippet('@book{key,\n  author = {Author Name},\n  title = {Book Title},\n  publisher = {Publisher},\n  year = {2023},\n  address = {City}\n}\n\n');
   });
 
-  document.getElementById('insertMath').addEventListener('click', () => {
-    insertSnippet('$E = mc^2$');
+  document.getElementById('insertInproceedings').addEventListener('click', () => {
+    insertSnippet('@inproceedings{key,\n  author = {Author Name},\n  title = {Paper Title},\n  booktitle = {Conference Proceedings},\n  year = {2023},\n  pages = {1--8},\n  organization = {Organization}\n}\n\n');
+  });
+
+  document.getElementById('insertOnline').addEventListener('click', () => {
+    insertSnippet('@online{key,\n  author = {Author Name},\n  title = {Web Page Title},\n  url = {https://example.com},\n  urldate = {2023-12-01},\n  year = {2023}\n}\n\n');
   });
 
   function insertSnippet(text) {

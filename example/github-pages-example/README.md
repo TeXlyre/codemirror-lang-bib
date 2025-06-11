@@ -1,6 +1,6 @@
-# GitHub Pages Demo for CodeMirror LaTeX Extension
+# GitHub Pages Demo for CodeMirror BibTeX Extension
 
-This directory contains a demo of the CodeMirror LaTeX extension that is configured to work with GitHub Pages. It serves as the main website for the project at https://texlyre.github.io/codemirror-lang-latex/.
+This directory contains a demo of the CodeMirror BibTeX extension that is configured to work with GitHub Pages. It serves as the main website for the project at https://texlyre.github.io/codemirror-lang-bib/.
 
 ## Development
 
@@ -8,7 +8,7 @@ To run this demo locally:
 
 ```bash
 # From the project root
-npm run setup-pages-example
+npm run build:pages-example
 npm run pages-example
 ```
 

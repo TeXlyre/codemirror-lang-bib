@@ -5,81 +5,78 @@ import { searchKeymap, highlightSelectionMatches } from '@codemirror/search';
 import { completionKeymap } from '@codemirror/autocomplete';
 import { syntaxHighlighting, defaultHighlightStyle } from '@codemirror/language';
 
-// Import the LaTeX extension from a relative path to access the built package
-import { latex } from '../../..';
-import '../../../dist/latex.css';
+// Import the BibTeX extension from a relative path to access the built package
+import { bibtex } from '../../..';
+import '../../../dist/bib.css';
 import './styles.css';
 
-// Example LaTeX document
-const initialDoc = `\\documentclass{article}
-\\usepackage{amsmath}
-\\usepackage{graphicx}
+// Example BibTeX document
+const initialDoc = `@article{einstein1905,
+  author = {Albert Einstein},
+  title = {Zur Elektrodynamik bewegter K{\"o}rper},
+  journal = {Annalen der Physik},
+  year = {1905},
+  volume = {17},
+  number = {10},
+  pages = {891--921},
+  doi = {10.1002/andp.19053221004}
+}
 
-\\title{CodeMirror LaTeX Extension Demo}
-\\author{LaTeX Editor Example}
-\\date{\\today}
+@book{knuth1984,
+  author = {Donald E. Knuth},
+  title = {The {\\TeX}book},
+  publisher = {Addison-Wesley},
+  year = {1984},
+  series = {Computers and Typesetting},
+  volume = {A},
+  address = {Reading, Massachusetts},
+  isbn = {0-201-13447-0}
+}
 
-\\begin{document}
+@inproceedings{lamport1994,
+  author = {Leslie Lamport},
+  title = {\\LaTeX: A Document Preparation System},
+  booktitle = {Proceedings of the International Conference on Document Processing},
+  year = {1994},
+  pages = {123--130},
+  organization = {ACM},
+  address = {New York, NY},
+  note = {Second edition}
+}
 
-\\maketitle
+@online{codemirror2023,
+  author = {Marijn Haverbeke},
+  title = {CodeMirror 6: Next Generation Code Editor},
+  url = {https://codemirror.net/6/},
+  urldate = {2023-12-01},
+  year = {2023},
+  note = {Accessed December 1, 2023}
+}
 
-\\section{Introduction}
-This is a sample document demonstrating the LaTeX language support in CodeMirror 6.
+@phdthesis{smith2022,
+  author = {Jane Smith},
+  title = {Advanced Bibliography Management in Digital Academic Writing},
+  school = {University of Technology},
+  year = {2022},
+  address = {Boston, MA},
+  month = {may},
+  note = {Available at university library}
+}
 
-\\subsection{Features Showcase}
-Here you can see different LaTeX features supported by this extension:
-
-\\subsection{Math Example}
-Let's include some math: $E = mc^2$
-
-Also, we can use display math:
-\\begin{equation}
-  f(x) = \\int_{-\\infty}^{\\infty} \\hat{f}(\\xi)\\,e^{2 \\pi i \\xi x} \\,d\\xi
-\\end{equation}
-
-\\subsection{Lists}
-\\begin{itemize}
-  \\item Syntax highlighting
-  \\item Auto-indentation for environments
-  \\item Code folding
-  \\item Bracket matching
-  \\item Autocompletion
-  \\item Auto-closing of environments
-  \\item Hover tooltips with documentation
-  \\item LaTeX-specific linting
-\\end{itemize}
-
-\\section{Figures and Tables}
-\\begin{figure}[htbp]
-  \\centering
-  % Placeholder for an image
-  \\includegraphics[width=0.7\\textwidth]{example-image}
-  \\caption{Example figure}
-  \\label{fig:example}
-\\end{figure}
-
-\\begin{table}[htbp]
-  \\centering
-  \\begin{tabular}{|l|c|r|}
-    \\hline
-    Left & Center & Right \\\\
-    \\hline
-    1 & 2 & 3 \\\\
-    4 & 5 & 6 \\\\
-    \\hline
-  \\end{tabular}
-  \\caption{A simple table}
-  \\label{tab:example}
-\\end{table}
-
-\\end{document}`;
+@misc{github2023,
+  author = {GitHub Inc.},
+  title = {GitHub: Where the world builds software},
+  howpublished = {\\url{https://github.com}},
+  year = {2023},
+  note = {Online platform for version control and collaboration}
+}`;
 
 // Initialize the editor
 let currentOptions = {
-  autoCloseTags: true,
   enableLinting: true,
   enableTooltips: true,
-  autoCloseBrackets: false  // Disable auto-closing brackets as it interferes with autoclosetags
+  enableAutocomplete: true,
+  autoCloseBrackets: true
 };
 
 function createEditor() {
@@ -96,17 +93,17 @@ function createEditor() {
       ...completionKeymap
     ]),
 
-    // Line wrapping is helpful for LaTeX
+    // Line wrapping is helpful for BibTeX
     EditorView.lineWrapping
   ];
 
-  // Add the LaTeX language support with current options
+  // Add the BibTeX language support with current options
   try {
-    const latexExtension = latex(currentOptions);
-    extensions.push(latexExtension);
+    const bibtexExtension = bibtex(currentOptions);
+    extensions.push(bibtexExtension);
   } catch (error) {
-    console.error("Failed to load LaTeX extension:", error);
-    // Continue with basic editor if LaTeX extension fails
+    console.error("Failed to load BibTeX extension:", error);
+    // Continue with basic editor if BibTeX extension fails
   }
 
   const state = EditorState.create({
@@ -126,11 +123,6 @@ document.addEventListener('DOMContentLoaded', () => {
   let editorView = createEditor();
 
   // Handle option changes
-  document.getElementById('autoCloseTags').addEventListener('change', e => {
-    currentOptions.autoCloseTags = e.target.checked;
-    recreateEditor();
-  });
-
   document.getElementById('enableLinting').addEventListener('change', e => {
     currentOptions.enableLinting = e.target.checked;
     recreateEditor();
@@ -138,6 +130,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
   document.getElementById('enableTooltips').addEventListener('change', e => {
     currentOptions.enableTooltips = e.target.checked;
+    recreateEditor();
+  });
+
+  document.getElementById('enableAutocomplete').addEventListener('change', e => {
+    currentOptions.enableAutocomplete = e.target.checked;
     recreateEditor();
   });
 
@@ -163,16 +160,20 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // Toolbar button actions
-  document.getElementById('insertSection').addEventListener('click', () => {
-    insertSnippet('\\section{New Section}\n');
+  document.getElementById('insertArticle').addEventListener('click', () => {
+    insertSnippet('@article{key,\n  author = {Author Name},\n  title = {Article Title},\n  journal = {Journal Name},\n  year = {2023},\n  volume = {1},\n  pages = {1--10}\n}\n\n');
   });
 
-  document.getElementById('insertEnvironment').addEventListener('click', () => {
-    insertSnippet('\\begin{itemize}\n\t\\item New Item\n\\end{itemize}\n');
+  document.getElementById('insertBook').addEventListener('click', () => {
+    insertSnippet('@book{key,\n  author = {Author Name},\n  title = {Book Title},\n  publisher = {Publisher},\n  year = {2023},\n  address = {City}\n}\n\n');
   });
 
-  document.getElementById('insertMath').addEventListener('click', () => {
-    insertSnippet('$E = mc^2$');
+  document.getElementById('insertInproceedings').addEventListener('click', () => {
+    insertSnippet('@inproceedings{key,\n  author = {Author Name},\n  title = {Paper Title},\n  booktitle = {Conference Proceedings},\n  year = {2023},\n  pages = {1--8},\n  organization = {Organization}\n}\n\n');
+  });
+
+  document.getElementById('insertOnline').addEventListener('click', () => {
+    insertSnippet('@online{key,\n  author = {Author Name},\n  title = {Web Page Title},\n  url = {https://example.com},\n  urldate = {2023-12-01},\n  year = {2023}\n}\n\n');
   });
 
   function insertSnippet(text) {

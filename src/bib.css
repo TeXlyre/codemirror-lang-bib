@@ -1,0 +1,258 @@
+/* BibTeX syntax highlighting for CodeMirror 6 */
+
+.cm-content {
+  white-space: pre-wrap;
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* BibTeX-specific syntax highlighting */
+
+/* Entry types (@article, @book, etc.) */
+.cm-definitionKeyword {
+  color: #d73a49;
+  font-weight: bold;
+}
+
+/* Special entries (@string, @preamble, @comment) */
+.cm-keyword {
+  color: #6f42c1;
+  font-weight: bold;
+}
+
+/* Comments */
+.cm-comment {
+  color: #6a737d;
+  font-style: italic;
+}
+
+/* Entry keys (citation keys) */
+.cm-atom {
+  color: #005cc5;
+  font-weight: 600;
+}
+
+/* Field names */
+.cm-propertyName {
+  color: #e36209;
+  font-weight: 500;
+}
+
+/* String values */
+.cm-string {
+  color: #032f62;
+}
+
+/* Number values */
+.cm-number {
+  color: #005cc5;
+}
+
+/* Variable references */
+.cm-variableName {
+  color: #6f42c1;
+}
+
+/* Operators and punctuation */
+.cm-operator {
+  color: #d73a49;
+  font-weight: bold;
+}
+
+.cm-separator {
+  color: #586069;
+}
+
+.cm-brace {
+  color: #24292e;
+  font-weight: bold;
+}
+
+.cm-quote {
+  color: #032f62;
+}
+
+/* Content and whitespace */
+.cm-content {
+  color: #24292e;
+}
+
+/* BibTeX tooltip styles */
+.cm-bibtex-tooltip {
+  background-color: #f8f8f8;
+  border: 1px solid #d1d5da;
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(140, 149, 159, 0.2);
+  color: #24292e;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  font-size: 12px;
+  line-height: 1.4;
+  max-width: 400px;
+  padding: 12px 16px;
+}
+
+.cm-bibtex-tooltip-description {
+  margin-bottom: 8px;
+  font-weight: 500;
+}
+
+.cm-bibtex-tooltip-field-name {
+  font-weight: 600;
+  color: #e36209;
+  margin-bottom: 4px;
+}
+
+.cm-bibtex-tooltip-required {
+  margin-top: 8px;
+  font-size: 11px;
+  color: #d73a49;
+}
+
+.cm-bibtex-tooltip-required::before {
+  content: '• ';
+  font-weight: bold;
+}
+
+.cm-bibtex-tooltip-optional {
+  margin-top: 4px;
+  font-size: 11px;
+  color: #6a737d;
+}
+
+.cm-bibtex-tooltip-optional::before {
+  content: '• ';
+  font-weight: bold;
+}
+
+.cm-bibtex-tooltip-example-label {
+  margin-top: 8px;
+  margin-bottom: 4px;
+  font-weight: 500;
+  font-size: 11px;
+  color: #586069;
+}
+
+.cm-bibtex-tooltip-example {
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  font-size: 10px;
+  background-color: #f6f8fa;
+  border: 1px solid #e1e4e8;
+  border-radius: 3px;
+  padding: 6px 8px;
+  margin: 0;
+  white-space: pre-wrap;
+  color: #24292e;
+}
+
+.cm-bibtex-tooltip-note {
+  margin-top: 6px;
+  font-size: 11px;
+  color: #6a737d;
+  font-style: italic;
+}
+
+/* Diagnostic styles (for linting) */
+.cm-diagnostic {
+  padding: 2px 4px;
+  border-radius: 3px;
+}
+
+.cm-diagnostic-error {
+  background-color: rgba(215, 58, 73, 0.1);
+  border-left: 3px solid #d73a49;
+}
+
+.cm-diagnostic-warning {
+  background-color: rgba(255, 193, 7, 0.1);
+  border-left: 3px solid #ffc107;
+}
+
+.cm-diagnostic-info {
+  background-color: rgba(0, 123, 255, 0.1);
+  border-left: 3px solid #007bff;
+}
+
+/* Active line highlight */
+.cm-activeLine {
+  background-color: rgba(0, 0, 0, 0.04);
+}
+
+/* Matching brackets */
+.cm-matchingBracket {
+  background-color: rgba(40, 167, 69, 0.2);
+  outline: 1px solid #28a745;
+}
+
+.cm-nonmatchingBracket {
+  background-color: rgba(220, 53, 69, 0.2);
+  outline: 1px solid #dc3545;
+}
+
+/* Selection */
+.cm-selectionBackground {
+  background-color: rgba(0, 123, 255, 0.2);
+}
+
+/* Editor focus */
+.cm-editor.cm-focused {
+  outline: 2px solid #0366d6;
+  outline-offset: -2px;
+}
+
+/* Gutter */
+.cm-gutters {
+  background-color: #f6f8fa;
+  border-right: 1px solid #e1e4e8;
+}
+
+.cm-lineNumbers .cm-gutterElement {
+  color: #6a737d;
+  padding: 0 3px 0 5px;
+}
+
+/* Folding */
+.cm-foldPlaceholder {
+  background-color: #e1e4e8;
+  border: 1px solid #d1d5da;
+  border-radius: 3px;
+  color: #6a737d;
+  font-size: 10px;
+  margin: 0 2px;
+  padding: 0 4px;
+}
+
+/* Search highlights */
+.cm-searchMatch {
+  background-color: rgba(255, 235, 59, 0.5);
+  outline: 1px solid #ffeb3b;
+}
+
+.cm-searchMatch.cm-searchMatch-selected {
+  background-color: rgba(255, 193, 7, 0.8);
+  outline: 1px solid #ffc107;
+}
+
+/* Completion popup */
+.cm-tooltip.cm-tooltip-autocomplete > ul {
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  font-size: 12px;
+}
+
+.cm-completionIcon-keyword::after {
+  content: "@";
+  color: #d73a49;
+  font-weight: bold;
+}
+
+.cm-completionIcon-property::after {
+  content: "F";
+  color: #e36209;
+  font-weight: bold;
+}
+
+.cm-completionIcon-constant::after {
+  content: "C";
+  color: #005cc5;
+  font-weight: bold;
+}

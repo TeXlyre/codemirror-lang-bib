@@ -1,4 +1,4 @@
-# Contributing to CodeMirror 6 LaTeX Language Support
+# Contributing to CodeMirror 6 BibTeX Language Support
 
 Thank you for your interest in contributing to this project! This document provides guidelines and instructions for contributing.
 
@@ -6,8 +6,8 @@ Thank you for your interest in contributing to this project! This document provi
 
 1. Clone the repository:
    ```
-   git clone https://github.com/texlyre/codemirror-lang-latex.git
-   cd codemirror-lang-latex
+   git clone https://github.com/texlyre/codemirror-lang-bib.git
+   cd codemirror-lang-bib
    ```
 
 2. Install dependencies:
@@ -34,10 +34,16 @@ Thank you for your interest in contributing to this project! This document provi
 
 ## Project Structure
 
-- `grammar/` - Contains the LaTeX grammar files used to generate the parser
 - `src/` - Source code for the CodeMirror extension
+  - `bib-parser.ts` - Main language definition and parser integration
+  - `bibtex-parser.ts` - BibTeX parser integration
+  - `completion.ts` - Autocompletion logic for entry types and fields
+  - `linter.ts` - BibTeX-specific linting rules
+  - `tooltips.ts` - Hover tooltip functionality
+  - `bib.css` - Syntax highlighting styles
+  - `index.ts` - Main export file
 - `example/` - Contains example applications showing the extension in use
-- `scripts/` - Utility scripts for building and generating files
+- `scripts/` - Utility scripts for building and setup
 - `dist/` - Build output (generated)
 
 ## Making Changes
@@ -54,7 +60,7 @@ Thank you for your interest in contributing to this project! This document provi
    npm run build
    ```
 
-4. Test your changes using the example application:
+4. Test your changes using the example applications:
    ```
    npm run example
    ```
@@ -74,13 +80,34 @@ Thank you for your interest in contributing to this project! This document provi
 - Write clear, documented code
 - Add comments for complex functionality
 - Update documentation when necessary
+- Use TypeScript for type safety
+
+## BibTeX Support Guidelines
+
+When adding new features to the BibTeX support:
+
+- **Entry Types**: Follow standard BibTeX specifications
+- **Field Names**: Support both required and optional fields per entry type
+- **Validation**: Ensure linting rules are helpful but not overly strict
+- **Autocompletion**: Provide context-aware suggestions
+- **Tooltips**: Include helpful descriptions and examples
+
+## Testing
+
+Test your changes with various BibTeX documents:
+
+- Standard academic entries (@article, @book, @inproceedings)
+- Special entries (@string, @preamble, @comment)
+- Edge cases (missing fields, malformed entries)
+- Different field value formats (quoted strings, braced values, numbers)
 
 ## Pull Request Process
 
 1. Ensure your code builds without errors
 2. Update the README.md with details of changes if appropriate
-3. Your pull request will be reviewed by the maintainers
-4. Address any requested changes
+3. Test with both example applications
+4. Your pull request will be reviewed by the maintainers
+5. Address any requested changes
 
 ## License
 

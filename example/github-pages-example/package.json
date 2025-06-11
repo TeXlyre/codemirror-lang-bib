@@ -1,14 +1,14 @@
 {
-  "name": "latex-extension-demo-pages",
+  "name": "bibtex-extension-demo-pages",
   "version": "0.1.0",
-  "description": "GitHub Pages Demo for CodeMirror LaTeX extension",
+  "description": "GitHub Pages Demo for CodeMirror BibTeX extension",
   "author": "Fares Abawi <fares@abawi.me> (https://abawi.me)",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/texlyre/codemirror-lang-latex.git"
+    "url": "https://github.com/texlyre/codemirror-lang-bib.git"
   },
-  "homepage": "https://texlyre.github.io/codemirror-lang-latex/",
+  "homepage": "https://texlyre.github.io/codemirror-lang-bib/",
   "private": true,
   "scripts": {
     "build": "webpack --mode production",

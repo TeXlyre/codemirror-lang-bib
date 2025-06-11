@@ -1,273 +1,344 @@
 // src/completion.ts
 import { Completion, CompletionContext, CompletionResult } from '@codemirror/autocomplete';
 
-// Checks if we're at the beginning of an environment name within a \begin{} or \end{}
-function isInEnvironmentName(context: CompletionContext): boolean {
+// BibTeX entry types for autocompletion
+export const entryTypes: readonly string[] = [
+  'article',
+  'book',
+  'booklet',
+  'conference',
+  'inbook',
+  'incollection',
+  'inproceedings',
+  'manual',
+  'mastersthesis',
+  'misc',
+  'online',
+  'phdthesis',
+  'proceedings',
+  'techreport',
+  'unpublished',
+  'webpage'
+];
+
+// Common BibTeX field names for autocompletion
+export const fieldNames: readonly string[] = [
+  // Required/common fields
+  'author',
+  'title',
+  'journal',
+  'year',
+  'publisher',
+  'booktitle',
+  'editor',
+  'pages',
+  'volume',
+  'number',
+  'series',
+  'edition',
+  'month',
+  'note',
+  'key',
+
+  // Optional fields
+  'address',
+  'annote',
+  'chapter',
+  'crossref',
+  'doi',
+  'eprint',
+  'howpublished',
+  'institution',
+  'isbn',
+  'issn',
+  'keywords',
+  'language',
+  'organization',
+  'school',
+  'type',
+  'url',
+  'urldate',
+  'abstract',
+
+  // Modern fields
+  'archiveprefix',
+  'primaryclass',
+  'eid',
+  'numpages'
+];
+
+// Month abbreviations commonly used in BibTeX
+export const monthAbbreviations: readonly string[] = [
+  'jan', 'feb', 'mar', 'apr', 'may', 'jun',
+  'jul', 'aug', 'sep', 'oct', 'nov', 'dec'
+];
+
+// Common journal abbreviations
+export const journalAbbreviations: readonly string[] = [
+  'Nature',
+  'Science',
+  'Cell',
+  'PNAS',
+  'J. Am. Chem. Soc.',
+  'Phys. Rev. Lett.',
+  'IEEE Trans.',
+  'ACM Trans.',
+  'Commun. ACM'
+];
+
+// Define and export snippets for BibTeX
+export const snippets: readonly Completion[] = [
+  {
+    label: "@article",
+    type: "keyword",
+    detail: "Journal article",
+    info: "Create a journal article entry",
+    apply: "@article{${0:key},\n\tauthor = {${1:author}},\n\ttitle = {${2:title}},\n\tjournal = {${3:journal}},\n\tyear = {${4:year}},\n\tvolume = {${5:volume}},\n\tnumber = {${6:number}},\n\tpages = {${7:pages}}\n}",
+  },
+  {
+    label: "@book",
+    type: "keyword",
+    detail: "Book",
+    info: "Create a book entry",
+    apply: "@book{${0:key},\n\tauthor = {${1:author}},\n\ttitle = {${2:title}},\n\tpublisher = {${3:publisher}},\n\tyear = {${4:year}},\n\taddress = {${5:address}}\n}",
+  },
+  {
+    label: "@inproceedings",
+    type: "keyword",
+    detail: "Conference paper",
+    info: "Create a conference proceedings entry",
+    apply: "@inproceedings{${0:key},\n\tauthor = {${1:author}},\n\ttitle = {${2:title}},\n\tbooktitle = {${3:booktitle}},\n\tyear = {${4:year}},\n\tpages = {${5:pages}},\n\torganization = {${6:organization}}\n}",
+  },
+  {
+    label: "@misc",
+    type: "keyword",
+    detail: "Miscellaneous",
+    info: "Create a miscellaneous entry",
+    apply: "@misc{${0:key},\n\tauthor = {${1:author}},\n\ttitle = {${2:title}},\n\tyear = {${3:year}},\n\tnote = {${4:note}}\n}",
+  },
+  {
+    label: "@online",
+    type: "keyword",
+    detail: "Online resource",
+    info: "Create an online resource entry",
+    apply: "@online{${0:key},\n\tauthor = {${1:author}},\n\ttitle = {${2:title}},\n\turl = {${3:url}},\n\turldate = {${4:date}},\n\tyear = {${5:year}}\n}",
+  }
+];
+
+// Field requirements by entry type
+const fieldRequirements: Record<string, { required: string[], optional: string[] }> = {
+  'article': {
+    required: ['author', 'title', 'journal', 'year'],
+    optional: ['volume', 'number', 'pages', 'month', 'note', 'doi', 'url']
+  },
+  'book': {
+    required: ['author', 'title', 'publisher', 'year'],
+    optional: ['volume', 'series', 'address', 'edition', 'month', 'note', 'isbn']
+  },
+  'inproceedings': {
+    required: ['author', 'title', 'booktitle', 'year'],
+    optional: ['editor', 'pages', 'organization', 'publisher', 'address', 'month', 'note']
+  },
+  'incollection': {
+    required: ['author', 'title', 'booktitle', 'publisher', 'year'],
+    optional: ['editor', 'pages', 'chapter', 'address', 'month', 'note']
+  },
+  'phdthesis': {
+    required: ['author', 'title', 'school', 'year'],
+    optional: ['address', 'month', 'note']
+  },
+  'mastersthesis': {
+    required: ['author', 'title', 'school', 'year'],
+    optional: ['address', 'month', 'note']
+  },
+  'techreport': {
+    required: ['author', 'title', 'institution', 'year'],
+    optional: ['type', 'number', 'address', 'month', 'note']
+  },
+  'manual': {
+    required: ['title'],
+    optional: ['author', 'organization', 'address', 'edition', 'month', 'year', 'note']
+  },
+  'misc': {
+    required: ['title'],
+    optional: ['author', 'howpublished', 'month', 'year', 'note', 'url']
+  },
+  'online': {
+    required: ['title', 'url'],
+    optional: ['author', 'year', 'month', 'urldate', 'note']
+  }
+};
+
+// Checks if we're inside an entry definition
+function isInEntry(context: CompletionContext): boolean {
+  const textBefore = context.state.sliceDoc(
+    Math.max(0, context.pos - 200),
+    context.pos
+  );
+
+  const lastAt = textBefore.lastIndexOf('@');
+  const lastBrace = textBefore.lastIndexOf('{');
+  const lastCloseBrace = textBefore.lastIndexOf('}');
+
+  return lastAt !== -1 && lastBrace > lastAt && lastCloseBrace < lastBrace;
+}
+
+// Checks if we're typing an entry type after @
+function isTypingEntryType(context: CompletionContext): boolean {
   const textBefore = context.state.sliceDoc(
     Math.max(0, context.pos - 20),
     context.pos
   );
-  return /\\(begin|end)\{[^}]*$/.test(textBefore);
+  return /@[a-zA-Z]*$/.test(textBefore);
 }
 
-// Checks if we're inside a command name (after a backslash)
-function isInCommandName(context: CompletionContext): boolean {
+// Checks if we're typing a field name
+function isTypingFieldName(context: CompletionContext): boolean {
+  const textBefore = context.state.sliceDoc(
+    Math.max(0, context.pos - 50),
+    context.pos
+  );
+
+  // Look for comma or opening brace followed by optional whitespace and identifier
+  return /[,{]\s*[a-zA-Z]*$/.test(textBefore) && isInEntry(context);
+}
+
+// Checks if we're typing a field value
+function isTypingFieldValue(context: CompletionContext): boolean {
   const textBefore = context.state.sliceDoc(
     Math.max(0, context.pos - 30),
     context.pos
   );
-  return /\\[a-zA-Z]*$/.test(textBefore);
+
+  return /[a-zA-Z_]+\s*=\s*["{]?[^"}]*$/.test(textBefore) && isInEntry(context);
 }
 
-// Checks if we're in math mode
-function isInMathMode(context: CompletionContext): boolean {
-  // A more sophisticated implementation would use the syntax tree
-  // to determine if we're inside math mode, but this simple version
-  // just checks for dollar signs
+// Gets the current entry type for context-aware field suggestions
+function getCurrentEntryType(context: CompletionContext): string | null {
   const textBefore = context.state.sliceDoc(0, context.pos);
-  const dollars = textBefore.match(/\$/g);
-  return dollars ? dollars.length % 2 === 1 : false;
+  const match = textBefore.match(/@([a-zA-Z]+)\s*{[^}]*$/);
+  return match ? match[1].toLowerCase() : null;
 }
 
-// LaTeX environment names for autocompletion
-export const environments: readonly string[] = [
-  // Document structure
-  'document', 'abstract',
-
-  // Sectioning alternatives
-  'appendix', 'frontmatter', 'mainmatter', 'backmatter',
-
-  // Floats
-  'figure', 'figure*', 'table', 'table*', 'wrapfigure', 'subfigure',
-
-  // Text alignment
-  'center', 'flushleft', 'flushright', 'quote', 'quotation', 'verse',
-
-  // Lists
-  'itemize', 'enumerate', 'description', 'list',
-
-  // Verbatim
-  'verbatim', 'verbatim*', 'lstlisting', 'minted', 'Verbatim', 'comment',
-
-  // Math
-  'math', 'displaymath', 'equation', 'equation*', 'align', 'align*',
-  'gather', 'gather*', 'multline', 'multline*', 'flalign', 'flalign*',
-  'alignat', 'alignat*', 'array', 'cases', 'split',
-
-  // Tables
-  'tabular', 'tabular*', 'tabularx', 'longtable', 'xltabular',
-
-  // Theorems
-  'theorem', 'lemma', 'corollary', 'proposition', 'definition', 'example', 'proof',
-
-  // TikZ
-  'tikzpicture', 'scope',
-
-  // Boxes
-  'minipage'
-];
-
-// LaTeX commands for autocompletion
-export const commands: readonly string[] = [
-  // Document structure
-  '\\documentclass', '\\usepackage', '\\title', '\\author', '\\date', '\\maketitle',
-  '\\tableofcontents', '\\appendix', '\\bibliography', '\\bibliographystyle',
-
-  // Sectioning commands
-  '\\part', '\\chapter', '\\section', '\\subsection', '\\subsubsection', '\\paragraph', '\\subparagraph',
-
-  // Environments
-  '\\begin', '\\end',
-
-  // References
-  '\\label', '\\ref', '\\pageref', '\\cite', '\\nocite', '\\bibitem',
-
-  // Text formatting
-  '\\textbf', '\\textit', '\\texttt', '\\textsf', '\\textrm', '\\textsc', '\\emph', '\\underline',
-  '\\textcolor', '\\colorbox',
-
-  // Lists
-  '\\item', '\\itemize', '\\enumerate',
-
-  // Graphics
-  '\\includegraphics', '\\caption', '\\figure',
-
-  // Math commands
-  '\\frac', '\\sqrt', '\\sum', '\\int', '\\prod', '\\lim', '\\infty', '\\partial',
-  '\\alpha', '\\beta', '\\gamma', '\\delta', '\\epsilon', '\\varepsilon', '\\zeta', '\\eta', '\\theta',
-  '\\iota', '\\kappa', '\\lambda', '\\mu', '\\nu', '\\xi', '\\pi', '\\rho', '\\sigma', '\\tau',
-  '\\upsilon', '\\phi', '\\varphi', '\\chi', '\\psi', '\\omega',
-  '\\Gamma', '\\Delta', '\\Theta', '\\Lambda', '\\Xi', '\\Pi', '\\Sigma', '\\Upsilon', '\\Phi', '\\Psi', '\\Omega',
-
-  // Special characters and spacing
-  '\\&', '\\%', '\\$', '\\#', '\\_', '\\{', '\\}', '\\\\', '\\quad', '\\qquad', '\\hspace', '\\vspace',
-
-  // Tables
-  '\\hline', '\\cline', '\\multicolumn', '\\multirow', '\\toprule', '\\midrule', '\\bottomrule',
-
-  // Definitions
-  '\\newcommand', '\\renewcommand', '\\newenvironment', '\\renewenvironment', '\\def', '\\let',
-
-  // Input/Include
-  '\\input', '\\include', '\\includeonly'
-];
-
-// Additional math commands for completion in math mode
-export const mathCommands: readonly string[] = [
-  // Greek letters already included in main commands
-
-  // Math operators
-  '\\sin', '\\cos', '\\tan', '\\arcsin', '\\arccos', '\\arctan',
-  '\\sinh', '\\cosh', '\\tanh', '\\log', '\\ln', '\\exp',
-  '\\min', '\\max', '\\sup', '\\inf', '\\lim', '\\limsup', '\\liminf',
-  '\\det', '\\dim', '\\mod', '\\gcd', '\\lcm', '\\mathop',
-
-  // Math symbols
-  '\\rightarrow', '\\leftarrow', '\\Rightarrow', '\\Leftarrow', '\\mapsto',
-  '\\approx', '\\sim', '\\simeq', '\\cong', '\\equiv', '\\prec', '\\succ',
-  '\\neq', '\\geq', '\\leq', '\\ll', '\\gg', '\\subset', '\\subseteq', '\\in', '\\notin',
-  '\\cap', '\\cup', '\\setminus', '\\emptyset', '\\varnothing',
-  '\\forall', '\\exists', '\\nexists',
-  '\\mathbb{R}', '\\mathbb{Z}', '\\mathbb{N}', '\\mathbb{Q}', '\\mathbb{C}',
-
-  // Math decorations
-  '\\hat', '\\tilde', '\\bar', '\\vec', '\\dot', '\\ddot', '\\underline', '\\overline',
-
-  // Math environments
-  '\\begin{equation}', '\\begin{align}', '\\begin{align*}', '\\begin{gather}', '\\begin{array}',
-  '\\begin{cases}', '\\begin{matrix}', '\\begin{pmatrix}', '\\begin{bmatrix}', '\\begin{vmatrix}'
-];
-
-// Completions for package names after \usepackage
-export const packages: readonly string[] = [
-  'amsmath', 'amssymb', 'amsfonts', 'amsthm', 'mathtools',
-  'graphicx', 'xcolor', 'hyperref', 'url',
-  'geometry', 'fancyhdr', 'lastpage',
-  'booktabs', 'tabularx', 'longtable', 'multirow',
-  'tikz', 'pgfplots', 'pgf',
-  'babel', 'inputenc', 'fontenc',
-  'natbib', 'biblatex', 'cite',
-  'algorithm', 'algorithmic', 'listings', 'minted',
-  'enumitem', 'cleveref', 'microtype'
-];
-
-// Define and export snippets for LaTeX
-export const snippets: readonly Completion[] = [
-  {
-    label: "\\begin{...}",
-    type: "keyword",
-    detail: "LaTeX environment",
-    info: "Create a LaTeX environment",
-    apply: "\\begin{${0:environment}}\n\t$1\n\\end{${0:environment}}",
-  },
-  {
-    label: "\\section{...}",
-    type: "keyword",
-    detail: "LaTeX section",
-    info: "Create a section",
-    apply: "\\section{${0:title}}",
-  },
-  {
-    label: "\\subsection{...}",
-    type: "keyword",
-    detail: "LaTeX subsection",
-    info: "Create a subsection",
-    apply: "\\subsection{${0:title}}",
-  },
-  {
-    label: "\\begin{figure}",
-    type: "keyword",
-    detail: "LaTeX figure environment",
-    info: "Create a figure environment",
-    apply: "\\begin{figure}[${0:htbp}]\n\t\\centering\n\t\\includegraphics[width=${1:0.8}\\textwidth]{${2:filename}}\n\t\\caption{${3:caption}}\n\t\\label{fig:${4:label}}\n\\end{figure}",
-  },
-  {
-    label: "\\begin{table}",
-    type: "keyword",
-    detail: "LaTeX table environment",
-    info: "Create a table environment",
-    apply: "\\begin{table}[${0:htbp}]\n\t\\centering\n\t\\begin{tabular}{${1:ccc}}\n\t\t${2:header1} & ${3:header2} & ${4:header3} \\\\\n\t\t\\hline\n\t\t${5:data1} & ${6:data2} & ${7:data3} \\\\\n\t\t${8:data4} & ${9:data5} & ${10:data6} \\\\\n\t\\end{tabular}\n\t\\caption{${11:caption}}\n\t\\label{tab:${12:label}}\n\\end{table}",
-  }
-];
-
-// Main completion function that provides autocomplete suggestions based on context
-export function latexCompletionSource(context: CompletionContext): CompletionResult | null {
-  // Broaden the matching pattern for better detection
+// Main completion function
+export function bibtexCompletionSource(context: CompletionContext): CompletionResult | null {
+  // Check for explicit completion request
   if (!context.explicit) {
-    const before = context.matchBefore(/\\[a-zA-Z]*$|\\(begin|end)\{[a-zA-Z]*$/);
+    const before = context.matchBefore(/@[a-zA-Z]*$|[a-zA-Z_]*$|[a-zA-Z_]+\s*=\s*["{]?[^"}]*$/);
     if (!before || before.from === before.to) {
       return null;
     }
   }
 
-  // Check if we're in an environment name
-  if (isInEnvironmentName(context)) {
-    const envMatch = context.matchBefore(/\\(begin|end)\{([a-zA-Z]*)$/);
-    if (envMatch) {
-      const options = environments.map(env => ({
-        label: env,
-        type: "class",
-        apply: env,
+  // Entry type completion
+  if (isTypingEntryType(context)) {
+    const entryMatch = context.matchBefore(/@([a-zA-Z]*)$/);
+    if (entryMatch) {
+      const options = entryTypes.map(type => ({
+        label: '@' + type,
+        type: "keyword",
+        apply: `@${type}{$\{0:key},\n\t$\{1:field} = {$\{2:value}}\n}`,
         boost: 1
       }));
 
+      // Add snippets to entry types
+      const allOptions = [...options, ...snippets];
+
       return {
-        from: envMatch.from + envMatch.text.lastIndexOf('{') + 1,
-        options,
-        validFor: /^[a-zA-Z*]*$/
+        from: entryMatch.from,
+        options: allOptions,
+        validFor: /^@?[a-zA-Z]*$/
       };
     }
   }
 
-  // Check if we're in a command name
-  if (isInCommandName(context)) {
-    const cmdMatch = context.matchBefore(/\\([a-zA-Z]*)$/);
-    if (cmdMatch) {
-      let options: Completion[] = commands.map(cmd => ({
-        label: cmd,
-        type: "function",
-        apply: cmd.startsWith('\\begin{') ?
-          cmd + '\n\t\n\\end' + cmd.substring(6) :
-          cmd,
-        boost: 1
-      }));
+  // Field name completion
+  if (isTypingFieldName(context)) {
+    const fieldMatch = context.matchBefore(/[,{]\s*([a-zA-Z_]*)$/);
+    if (fieldMatch) {
+      const entryType = getCurrentEntryType(context);
+      let availableFields = [...fieldNames];
 
-      // Add math commands if in math mode
-      if (isInMathMode(context)) {
-        options = [...options, ...mathCommands.map(cmd => ({
-          label: cmd,
-          type: "function",
-          apply: cmd.startsWith('\\begin{') ?
-            cmd + '\n\t\n\\end' + cmd.substring(6) :
-            cmd,
-          boost: 1
-        }))];
+      // Extract the field name being typed from the full match
+      const fullMatchResult = fieldMatch.text.match(/[,{]\s*([a-zA-Z_]*)$/);
+      const fieldNamePart = fullMatchResult ? fullMatchResult[1] : '';
+
+      // Add context-aware suggestions based on entry type
+      if (entryType && fieldRequirements[entryType]) {
+        const { required, optional } = fieldRequirements[entryType];
+        // Boost required fields for this entry type
+        const options = availableFields.map(field => ({
+          label: field,
+          type: "property",
+          apply: `${field} = {$\{0:value}}`,
+          boost: required.includes(field) ? 2 : (optional.includes(field) ? 1 : 0.5)
+        }));
+
+        return {
+          from: fieldMatch.from + fieldMatch.text.lastIndexOf(fieldNamePart),
+          options,
+          validFor: /^[a-zA-Z_]*$/
+        };
       }
 
-      // Add snippets to the commands
-      options = [...options, ...snippets];
+      const options = availableFields.map(field => ({
+        label: field,
+        type: "property",
+        apply: `${field} = {$\{0:value}}`,
+        boost: 1
+      }));
 
       return {
-        from: cmdMatch.from,
+        from: fieldMatch.from + fieldMatch.text.lastIndexOf(fieldNamePart),
         options,
-        validFor: /^\\?[a-zA-Z]*$/
+        validFor: /^[a-zA-Z_]*$/
       };
     }
   }
 
-  // Check if we're after \usepackage{
-  const packageMatch = context.matchBefore(/\\usepackage(\[\S*\])?\{([a-zA-Z,]*)$/);
-  if (packageMatch) {
-    return {
-      from: packageMatch.from + packageMatch.text.lastIndexOf('{') + 1,
-      options: packages.map(pkg => ({
-        label: pkg,
-        type: "constant",
-        apply: pkg,
-        boost: 1
-      })),
-      validFor: /^[a-zA-Z,]*$/
-    };
+  // Field value completion (for specific fields)
+  if (isTypingFieldValue(context)) {
+    const valueMatch = context.matchBefore(/([a-zA-Z_]+)\s*=\s*["{]?([^"}]*)$/);
+    if (valueMatch) {
+      // Extract field name and value from the full match
+      const fullMatchResult = valueMatch.text.match(/([a-zA-Z_]+)\s*=\s*["{]?([^"}]*)$/);
+      if (!fullMatchResult) return null;
+
+      const fieldName = fullMatchResult[1].toLowerCase();
+      const valuePart = fullMatchResult[2];
+
+      // Month field completion
+      if (fieldName === 'month') {
+        const options = monthAbbreviations.map(month => ({
+          label: month,
+          type: "constant",
+          apply: month,
+          boost: 1
+        }));
+
+        return {
+          from: valueMatch.from + valueMatch.text.lastIndexOf(valuePart),
+          options,
+          validFor: /^[a-zA-Z]*$/
+        };
+      }
+
+      // Journal field completion
+      if (fieldName === 'journal') {
+        const options = journalAbbreviations.map(journal => ({
+          label: journal,
+          type: "constant",
+          apply: journal,
+          boost: 1
+        }));
+
+        return {
+          from: valueMatch.from + valueMatch.text.lastIndexOf(valuePart),
+          options,
+          validFor: /^[^"}]*$/
+        };
+      }
+    }
   }
 
   return null;

@@ -3,248 +3,250 @@ import { hoverTooltip, Tooltip } from '@codemirror/view';
 import { syntaxTree } from '@codemirror/language';
 import { SyntaxNode } from '@lezer/common';
 
-interface CommandInfo {
+interface EntryTypeInfo {
   description: string;
-  syntax: string;
+  requiredFields: string[];
+  optionalFields: string[];
   example?: string;
-  package?: string;
 }
 
-// Dictionary of common LaTeX command information
-const commandInfoMap: Record<string, CommandInfo> = {
-  '\\documentclass': {
-    description: 'Defines the type of document to be created.',
-    syntax: '\\documentclass[options]{class}',
-    example: '\\documentclass[12pt,a4paper]{article}'
+interface FieldInfo {
+  description: string;
+  example?: string;
+  note?: string;
+}
+
+// Dictionary of BibTeX entry type information
+const entryTypeInfoMap: Record<string, EntryTypeInfo> = {
+  'article': {
+    description: 'An article published in a journal or magazine.',
+    requiredFields: ['author', 'title', 'journal', 'year'],
+    optionalFields: ['volume', 'number', 'pages', 'month', 'note', 'doi', 'url'],
+    example: '@article{key,\n  author = {John Doe},\n  title = {Sample Article},\n  journal = {Journal Name},\n  year = {2023}\n}'
   },
-  '\\usepackage': {
-    description: 'Loads a LaTeX package.',
-    syntax: '\\usepackage[options]{package}',
-    example: '\\usepackage{graphicx}'
+  'book': {
+    description: 'A complete book published by a publisher.',
+    requiredFields: ['author', 'title', 'publisher', 'year'],
+    optionalFields: ['volume', 'series', 'address', 'edition', 'month', 'note', 'isbn'],
+    example: '@book{key,\n  author = {Jane Smith},\n  title = {Book Title},\n  publisher = {Publisher},\n  year = {2023}\n}'
   },
-  '\\begin': {
-    description: 'Begins an environment.',
-    syntax: '\\begin{environment}',
-    example: '\\begin{document}'
+  'inproceedings': {
+    description: 'A paper published in conference proceedings.',
+    requiredFields: ['author', 'title', 'booktitle', 'year'],
+    optionalFields: ['editor', 'pages', 'organization', 'publisher', 'address', 'month', 'note'],
+    example: '@inproceedings{key,\n  author = {Author Name},\n  title = {Paper Title},\n  booktitle = {Conference Proceedings},\n  year = {2023}\n}'
   },
-  '\\end': {
-    description: 'Ends an environment.',
-    syntax: '\\end{environment}',
-    example: '\\end{document}'
+  'incollection': {
+    description: 'A part of a book with its own title.',
+    requiredFields: ['author', 'title', 'booktitle', 'publisher', 'year'],
+    optionalFields: ['editor', 'pages', 'chapter', 'address', 'month', 'note']
   },
-  '\\section': {
-    description: 'Creates a section heading.',
-    syntax: '\\section[short title]{title}',
-    example: '\\section{Introduction}'
+  'conference': {
+    description: 'Same as inproceedings - a paper in conference proceedings.',
+    requiredFields: ['author', 'title', 'booktitle', 'year'],
+    optionalFields: ['editor', 'pages', 'organization', 'publisher', 'address', 'month', 'note']
   },
-  '\\subsection': {
-    description: 'Creates a subsection heading.',
-    syntax: '\\subsection[short title]{title}',
-    example: '\\subsection{Method}'
+  'phdthesis': {
+    description: 'A doctoral dissertation.',
+    requiredFields: ['author', 'title', 'school', 'year'],
+    optionalFields: ['address', 'month', 'note', 'type']
   },
-  '\\subsubsection': {
-    description: 'Creates a subsubsection heading.',
-    syntax: '\\subsubsection[short title]{title}',
-    example: '\\subsubsection{Implementation details}'
+  'mastersthesis': {
+    description: 'A master\'s thesis.',
+    requiredFields: ['author', 'title', 'school', 'year'],
+    optionalFields: ['address', 'month', 'note', 'type']
   },
-  '\\textbf': {
-    description: 'Sets text in bold font.',
-    syntax: '\\textbf{text}',
-    example: '\\textbf{Important note}'
+  'techreport': {
+    description: 'A technical report published by an institution.',
+    requiredFields: ['author', 'title', 'institution', 'year'],
+    optionalFields: ['type', 'number', 'address', 'month', 'note']
   },
-  '\\textit': {
-    description: 'Sets text in italic font.',
-    syntax: '\\textit{text}',
-    example: '\\textit{Emphasized term}'
+  'manual': {
+    description: 'Technical documentation or manual.',
+    requiredFields: ['title'],
+    optionalFields: ['author', 'organization', 'address', 'edition', 'month', 'year', 'note']
   },
-  '\\emph': {
-    description: 'Emphasizes text. Typically renders as italic.',
-    syntax: '\\emph{text}',
-    example: '\\emph{Important}'
+  'misc': {
+    description: 'For items that don\'t fit other categories.',
+    requiredFields: ['title'],
+    optionalFields: ['author', 'howpublished', 'month', 'year', 'note', 'url']
   },
-  '\\cite': {
-    description: 'Creates a citation.',
-    syntax: '\\cite[text]{key}',
-    example: '\\cite{smith2020}'
+  'online': {
+    description: 'An online resource or webpage.',
+    requiredFields: ['title', 'url'],
+    optionalFields: ['author', 'year', 'month', 'urldate', 'note']
   },
-  '\\ref': {
-    description: 'Creates a reference to a labeled element.',
-    syntax: '\\ref{label}',
-    example: '\\ref{fig:sample}'
+  'unpublished': {
+    description: 'A document that has not been published.',
+    requiredFields: ['author', 'title', 'note'],
+    optionalFields: ['month', 'year']
   },
-  '\\label': {
-    description: 'Assigns a label to an element for referencing.',
-    syntax: '\\label{name}',
-    example: '\\label{sec:introduction}'
+  'booklet': {
+    description: 'A printed work without a named publisher.',
+    requiredFields: ['title'],
+    optionalFields: ['author', 'howpublished', 'address', 'month', 'year', 'note']
   },
-  '\\includegraphics': {
-    description: 'Includes a graphics file.',
-    syntax: '\\includegraphics[options]{filename}',
-    example: '\\includegraphics[width=0.8\\textwidth]{figure.png}',
-    package: 'graphicx'
-  },
-  '\\frac': {
-    description: 'Creates a fraction.',
-    syntax: '\\frac{numerator}{denominator}',
-    example: '\\frac{a}{b}',
-    package: 'amsmath (optional)'
-  },
-  '\\item': {
-    description: 'Defines an item in a list environment.',
-    syntax: '\\item[optional label] content',
-    example: '\\item First item in list'
-  },
-  '\\maketitle': {
-    description: 'Generates a title based on \\title, \\author, and \\date commands.',
-    syntax: '\\maketitle',
-    example: '\\maketitle'
-  },
-  '\\title': {
-    description: 'Specifies the document title.',
-    syntax: '\\title{title}',
-    example: '\\title{My Document}'
-  },
-  '\\author': {
-    description: 'Specifies the document author(s).',
-    syntax: '\\author{name}',
-    example: '\\author{John Smith}'
-  },
-  '\\date': {
-    description: 'Specifies the document date.',
-    syntax: '\\date{date}',
-    example: '\\date{\\today}'
-  },
-  '\\caption': {
-    description: 'Adds a caption to a figure or table.',
-    syntax: '\\caption{text}',
-    example: '\\caption{A sample figure}'
-  },
-  '\\hline': {
-    description: 'Draws a horizontal line in a table.',
-    syntax: '\\hline',
-    example: '\\hline'
-  },
-  '\\newcommand': {
-    description: 'Defines a new command.',
-    syntax: '\\newcommand{\\name}[args][default]{definition}',
-    example: '\\newcommand{\\mycommand}[1]{Hello #1!}'
+  'proceedings': {
+    description: 'The proceedings of a conference.',
+    requiredFields: ['title', 'year'],
+    optionalFields: ['editor', 'publisher', 'organization', 'address', 'month', 'note']
   }
 };
 
-// Common LaTeX environments information
-const environmentInfoMap: Record<string, CommandInfo> = {
-  'document': {
-    description: 'The main document environment. All visible content must be inside this environment.',
-    syntax: '\\begin{document}...\\end{document}',
-    example: '\\begin{document}\nHello, world!\n\\end{document}'
+// Dictionary of field information
+const fieldInfoMap: Record<string, FieldInfo> = {
+  'author': {
+    description: 'The name(s) of the author(s).',
+    example: 'John Doe and Jane Smith',
+    note: 'Use "and" to separate multiple authors'
   },
-  'figure': {
-    description: 'Environment for floating figures.',
-    syntax: '\\begin{figure}[placement]...\\end{figure}',
-    example: '\\begin{figure}[ht]\n\\centering\n\\includegraphics{image.png}\n\\caption{A figure}\n\\label{fig:example}\n\\end{figure}'
+  'title': {
+    description: 'The title of the work.',
+    example: 'A Great Discovery in Science'
   },
-  'table': {
-    description: 'Environment for floating tables.',
-    syntax: '\\begin{table}[placement]...\\end{table}',
-    example: '\\begin{table}[ht]\n\\centering\n\\begin{tabular}{cc}\n...\n\\end{tabular}\n\\caption{A table}\n\\label{tab:example}\n\\end{table}'
+  'journal': {
+    description: 'The name of the journal or magazine.',
+    example: 'Nature'
   },
-  'tabular': {
-    description: 'Environment for creating tables.',
-    syntax: '\\begin{tabular}{columns}...\\end{tabular}',
-    example: '\\begin{tabular}{|l|c|r|}\n\\hline\nLeft & Center & Right \\\\\n\\hline\n\\end{tabular}'
+  'year': {
+    description: 'The year of publication.',
+    example: '2023'
   },
-  'itemize': {
-    description: 'Environment for bulleted lists.',
-    syntax: '\\begin{itemize}...\\end{itemize}',
-    example: '\\begin{itemize}\n\\item First item\n\\item Second item\n\\end{itemize}'
+  'publisher': {
+    description: 'The name of the publisher.',
+    example: 'Academic Press'
   },
-  'enumerate': {
-    description: 'Environment for numbered lists.',
-    syntax: '\\begin{enumerate}...\\end{enumerate}',
-    example: '\\begin{enumerate}\n\\item First item\n\\item Second item\n\\end{enumerate}'
+  'booktitle': {
+    description: 'The title of the book or conference proceedings.',
+    example: 'Proceedings of the International Conference'
   },
-  'equation': {
-    description: 'Environment for numbered equations.',
-    syntax: '\\begin{equation}...\\end{equation}',
-    example: '\\begin{equation}\nE = mc^2\n\\end{equation}'
+  'editor': {
+    description: 'The name(s) of the editor(s).',
+    example: 'John Editor and Jane Editor',
+    note: 'Use "and" to separate multiple editors'
   },
-  'equation*': {
-    description: 'Environment for unnumbered equations.',
-    syntax: '\\begin{equation*}...\\end{equation*}',
-    example: '\\begin{equation*}\nE = mc^2\n\\end{equation*}'
+  'pages': {
+    description: 'The page numbers.',
+    example: '123--145',
+    note: 'Use double dash (--) for page ranges'
   },
-  'align': {
-    description: 'Environment for aligning multiple equations, with equation numbers.',
-    syntax: '\\begin{align}...\\end{align}',
-    example: '\\begin{align}\na &= b \\\\\nc &= d\n\\end{align}',
-    package: 'amsmath'
+  'volume': {
+    description: 'The volume number of a journal or book.',
+    example: '42'
   },
-  'align*': {
-    description: 'Environment for aligning multiple equations, without equation numbers.',
-    syntax: '\\begin{align*}...\\end{align*}',
-    example: '\\begin{align*}\na &= b \\\\\nc &= d\n\\end{align*}',
-    package: 'amsmath'
+  'number': {
+    description: 'The issue number of a journal.',
+    example: '3'
   },
-  'verbatim': {
-    description: 'Environment for verbatim text, where LaTeX commands are not processed.',
-    syntax: '\\begin{verbatim}...\\end{verbatim}',
-    example: '\\begin{verbatim}\nThis is verbatim text.\n\\end{verbatim}'
+  'month': {
+    description: 'The month of publication.',
+    example: 'jan',
+    note: 'Use three-letter abbreviations without quotes'
   },
-  'center': {
-    description: 'Environment for centering text.',
-    syntax: '\\begin{center}...\\end{center}',
-    example: '\\begin{center}\nCentered text\n\\end{center}'
+  'note': {
+    description: 'Any additional information.',
+    example: 'In press'
   },
-  'tikzpicture': {
-    description: 'Environment for creating TikZ pictures.',
-    syntax: '\\begin{tikzpicture}...\\end{tikzpicture}',
-    example: '\\begin{tikzpicture}\n\\draw (0,0) -- (1,1);\n\\end{tikzpicture}',
-    package: 'tikz'
+  'doi': {
+    description: 'Digital Object Identifier.',
+    example: '10.1000/182'
+  },
+  'url': {
+    description: 'The URL of an online resource.',
+    example: 'https://example.com/paper.pdf'
+  },
+  'urldate': {
+    description: 'The date when the URL was last accessed.',
+    example: '2023-12-01'
+  },
+  'address': {
+    description: 'The address of the publisher or institution.',
+    example: 'New York, NY'
+  },
+  'edition': {
+    description: 'The edition of a book.',
+    example: '2nd'
+  },
+  'series': {
+    description: 'The name of a series or set of books.',
+    example: 'Lecture Notes in Computer Science'
+  },
+  'school': {
+    description: 'The name of the school where a thesis was written.',
+    example: 'MIT'
+  },
+  'institution': {
+    description: 'The institution that published a technical report.',
+    example: 'Stanford University'
+  },
+  'organization': {
+    description: 'The organization that sponsored a conference.',
+    example: 'IEEE'
+  },
+  'type': {
+    description: 'The type of technical report or thesis.',
+    example: 'PhD thesis'
+  },
+  'howpublished': {
+    description: 'How something unusual has been published.',
+    example: 'Self-published'
+  },
+  'chapter': {
+    description: 'The chapter number.',
+    example: '7'
+  },
+  'key': {
+    description: 'Used for alphabetizing when author is missing.',
+    example: 'Anonymous99'
+  },
+  'crossref': {
+    description: 'The key of another entry to inherit fields from.',
+    example: 'conf2023'
+  },
+  'isbn': {
+    description: 'International Standard Book Number.',
+    example: '978-0-123456-78-9'
+  },
+  'issn': {
+    description: 'International Standard Serial Number.',
+    example: '1234-5678'
+  },
+  'keywords': {
+    description: 'Keywords associated with the entry.',
+    example: 'machine learning, artificial intelligence'
+  },
+  'abstract': {
+    description: 'Abstract or summary of the work.',
+    example: 'This paper presents...'
   }
 };
 
 /**
- * Provides hover tooltips for LaTeX commands and environments
+ * Provides hover tooltips for BibTeX entry types and field names
  */
-export const latexHoverTooltip = hoverTooltip((view, pos, side) => {
+export const bibtexHoverTooltip = hoverTooltip((view, pos, side) => {
   const tree = syntaxTree(view.state);
   const node = tree.resolve(pos);
+  const text = view.state.sliceDoc(node.from, node.to);
 
-  // Check for control sequences
-  if (
-    node.name === 'CtrlSeq' ||
-    node.name.endsWith('CtrlSeq') ||
-    node.name === 'Begin' ||
-    node.name === 'End'
-  ) {
-    const cmdText = view.state.sliceDoc(node.from, node.to);
-    const info = commandInfoMap[cmdText];
-
-    if (info) {
-      return makeTooltip(info, node.from, node.to);
-    }
-  }
-
-  // Check for environments
-  if (node.name === 'EnvName' || node.name.endsWith('EnvName')) {
-    const envName = view.state.sliceDoc(node.from, node.to);
-    const info = environmentInfoMap[envName];
-
-    if (info) {
-      return makeTooltip(info, node.from, node.to);
-    }
-  }
-
-  // Check if we're in a begin/end environment name
-  const parent = node.parent;
-  if (parent && (parent.name === 'EnvNameGroup')) {
-    const envNameNode = findEnvNameNode(parent);
-    if (envNameNode) {
-      const envName = view.state.sliceDoc(envNameNode.from, envNameNode.to);
-      const info = environmentInfoMap[envName];
-
+  // Check for entry types (after @)
+  if (node.name === 'EntryType' || isEntryTypeContext(view, pos)) {
+    const entryType = extractEntryType(view, pos);
+    if (entryType) {
+      const info = entryTypeInfoMap[entryType.toLowerCase()];
       if (info) {
-        return makeTooltip(info, envNameNode.from, envNameNode.to);
+        return makeEntryTypeTooltip(info, entryType, node.from, node.to);
+      }
+    }
+  }
+
+  // Check for field names
+  if (node.name === 'FieldName' || isFieldNameContext(view, pos)) {
+    const fieldName = extractFieldName(view, pos);
+    if (fieldName) {
+      const info = fieldInfoMap[fieldName.toLowerCase()];
+      if (info) {
+        return makeFieldTooltip(info, fieldName, node.from, node.to);
       }
     }
   }
@@ -252,61 +254,110 @@ export const latexHoverTooltip = hoverTooltip((view, pos, side) => {
   return null;
 });
 
-// Helper to find environment name node
-function findEnvNameNode(node: SyntaxNode): SyntaxNode | null {
-  if (!node) return null;
-
-  for (let child = node.firstChild; child; child = child.nextSibling) {
-    if (
-      child.name === 'EnvName' ||
-      child.name === 'DocumentEnvName' ||
-      child.name === 'TabularEnvName' ||
-      child.name === 'EquationEnvName' ||
-      child.name === 'EquationArrayEnvName' ||
-      child.name === 'VerbatimEnvName' ||
-      child.name === 'TikzPictureEnvName' ||
-      child.name === 'FigureEnvName' ||
-      child.name === 'ListEnvName' ||
-      child.name === 'TableEnvName'
-    ) {
-      return child;
-    }
-  }
-
-  return null;
+// Helper functions for context detection
+function isEntryTypeContext(view: any, pos: number): boolean {
+  const textBefore = view.state.sliceDoc(Math.max(0, pos - 20), pos + 20);
+  return /@[a-zA-Z]*/.test(textBefore);
 }
 
-// Create the tooltip element
-function makeTooltip(info: CommandInfo, from: number, to: number): Tooltip {
-  let content = document.createElement('div');
-  content.className = 'cm-latex-tooltip';
+function isFieldNameContext(view: any, pos: number): boolean {
+  const textBefore = view.state.sliceDoc(Math.max(0, pos - 50), pos + 20);
+  return /[a-zA-Z_]+\s*=/.test(textBefore);
+}
+
+function extractEntryType(view: any, pos: number): string | null {
+  const textAround = view.state.sliceDoc(Math.max(0, pos - 20), pos + 20);
+  const match = textAround.match(/@([a-zA-Z]+)/);
+  return match ? match[1] : null;
+}
+
+function extractFieldName(view: any, pos: number): string | null {
+  const textAround = view.state.sliceDoc(Math.max(0, pos - 30), pos + 30);
+  const match = textAround.match(/([a-zA-Z_]+)\s*=/);
+  return match ? match[1] : null;
+}
+
+// Create tooltip for entry types
+function makeEntryTypeTooltip(info: EntryTypeInfo, entryType: string, from: number, to: number): Tooltip {
+  const content = document.createElement('div');
+  content.className = 'cm-bibtex-tooltip';
 
   // Description
-  let description = document.createElement('div');
+  const description = document.createElement('div');
   description.textContent = info.description;
-  description.className = 'cm-latex-tooltip-description';
+  description.className = 'cm-bibtex-tooltip-description';
   content.appendChild(description);
 
-  // Syntax
-  let syntax = document.createElement('div');
-  syntax.textContent = 'Syntax: ' + info.syntax;
-  syntax.className = 'cm-latex-tooltip-syntax';
-  content.appendChild(syntax);
+  // Required fields
+  if (info.requiredFields.length > 0) {
+    const required = document.createElement('div');
+    required.textContent = 'Required: ' + info.requiredFields.join(', ');
+    required.className = 'cm-bibtex-tooltip-required';
+    content.appendChild(required);
+  }
 
-  // Example (if provided)
+  // Optional fields
+  if (info.optionalFields.length > 0) {
+    const optional = document.createElement('div');
+    optional.textContent = 'Optional: ' + info.optionalFields.join(', ');
+    optional.className = 'cm-bibtex-tooltip-optional';
+    content.appendChild(optional);
+  }
+
+  // Example
   if (info.example) {
-    let example = document.createElement('div');
+    const example = document.createElement('div');
+    example.textContent = 'Example:';
+    example.className = 'cm-bibtex-tooltip-example-label';
+    content.appendChild(example);
+
+    const exampleCode = document.createElement('pre');
+    exampleCode.textContent = info.example;
+    exampleCode.className = 'cm-bibtex-tooltip-example';
+    content.appendChild(exampleCode);
+  }
+
+  return {
+    pos: from,
+    end: to,
+    above: true,
+    create(view) {
+      return { dom: content };
+    }
+  };
+}
+
+// Create tooltip for field names
+function makeFieldTooltip(info: FieldInfo, fieldName: string, from: number, to: number): Tooltip {
+  const content = document.createElement('div');
+  content.className = 'cm-bibtex-tooltip';
+
+  // Field name
+  const name = document.createElement('div');
+  name.textContent = fieldName;
+  name.className = 'cm-bibtex-tooltip-field-name';
+  content.appendChild(name);
+
+  // Description
+  const description = document.createElement('div');
+  description.textContent = info.description;
+  description.className = 'cm-bibtex-tooltip-description';
+  content.appendChild(description);
+
+  // Example
+  if (info.example) {
+    const example = document.createElement('div');
     example.textContent = 'Example: ' + info.example;
-    example.className = 'cm-latex-tooltip-example';
+    example.className = 'cm-bibtex-tooltip-example';
     content.appendChild(example);
   }
 
-  // Package (if required)
-  if (info.package) {
-    let package_ = document.createElement('div');
-    package_.textContent = 'Package: ' + info.package;
-    package_.className = 'cm-latex-tooltip-package';
-    content.appendChild(package_);
+  // Note
+  if (info.note) {
+    const note = document.createElement('div');
+    note.textContent = 'Note: ' + info.note;
+    note.className = 'cm-bibtex-tooltip-note';
+    content.appendChild(note);
   }
 
   return {

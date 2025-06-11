@@ -1,35 +1,38 @@
 // src/index.ts
 export {
-  latex,
-  latexLanguage,
-  latexBracketMatching,
-  latexCompletions,
-  autoCloseTags,
-  latexExtensions
-} from './latex-language';
+  bibtex,
+  bibtexLanguage,
+  bibtexBracketMatching
+} from './bib-parser';
 
 // Import and re-export from completion
-export { latexCompletionSource } from './completion';
+export { bibtexCompletionSource, snippets, entryTypes, fieldNames } from './completion';
 
 // Export the linter
-export { latexLinter } from './linter';
+export { bibtexLinter } from './linter';
 
 // Export the tooltips
-export { latexHoverTooltip } from './tooltips';
+export { bibtexHoverTooltip } from './tooltips';
 
-// Export the parser utilities
+// Export parser types and utilities
 export {
-  findEnvironmentName,
-  getIndentationLevel,
-  findMatchingEnvironment,
-  findSectionBoundaries
-} from './parser-integration';
-
-// Export snippets
-export { snippets } from './completion';
-
-// Export the parser directly - using type assertion to bypass declaration file issue
-export { parser } from './parser-integration';
+  parser,
+  isEntryType,
+  getFieldType,
+  RootNode,
+  TextNode,
+  BlockNode,
+  CommentNode,
+  PreambleNode,
+  StringNode,
+  EntryNode,
+  FieldNode,
+  ConcatNode,
+  LiteralNode,
+  BracedNode,
+  QuotedNode,
+  Node
+} from './bibtex-parser';
 
 // Export autocompletion components
 export { autocompletion, completionKeymap } from '@codemirror/autocomplete';

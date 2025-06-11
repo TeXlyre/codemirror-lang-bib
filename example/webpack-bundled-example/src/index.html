@@ -3,26 +3,24 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>CodeMirror 6 LaTeX Extension Demo</title>
+  <title>CodeMirror 6 BibTeX Extension Demo</title>
 </head>
 <body>
   <div class="container">
-    <h1>CodeMirror 6 LaTeX Extension Demo</h1>
-    <p>This demonstrates the LaTeX language support for CodeMirror 6.</p>
+    <h1>CodeMirror 6 BibTeX Extension Demo</h1>
+    <p>This demonstrates the BibTeX language support for CodeMirror 6.</p>
 
     <div class="editor-container">
       <div class="toolbar">
-        <button id="insertSection">Insert Section</button>
-        <button id="insertEnvironment">Insert Environment</button>
-        <button id="insertMath">Insert Math</button>
+        <button id="insertArticle">Insert Article</button>
+        <button id="insertBook">Insert Book</button>
+        <button id="insertInproceedings">Insert Conference Paper</button>
+        <button id="insertOnline">Insert Online Resource</button>
       </div>
       <div id="editor"></div>
     </div>
 
     <div class="options">
-      <label>
-        <input type="checkbox" id="autoCloseTags" checked> Auto-close tags
-      </label>
       <label>
         <input type="checkbox" id="enableLinting" checked> Enable linting
       </label>
@@ -30,7 +28,10 @@
         <input type="checkbox" id="enableTooltips" checked> Enable tooltips
       </label>
       <label>
-        <input type="checkbox" id="autoCloseBrackets"> Auto-close brackets
+        <input type="checkbox" id="enableAutocomplete" checked> Enable autocompletion
+      </label>
+      <label>
+        <input type="checkbox" id="autoCloseBrackets" checked> Auto-close brackets
       </label>
     </div>
   </div>
