@@ -1,7 +1,7 @@
 {
-  "name": "latex-extension-demo-pages",
+  "name": "bib-extension-demo-pages",
   "version": "0.1.0",
-  "description": "GitHub Pages Demo for CodeMirror LaTeX extension",
+  "description": "GitHub Pages Demo for CodeMirror BibTeX extension",
   "private": true,
   "scripts": {
     "build": "webpack --mode production",
