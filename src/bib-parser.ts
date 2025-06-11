@@ -1,8 +1,6 @@
 // src/bib-parser.ts
 import { parser } from './bibtex-parser';
-import { LRLanguage, LanguageSupport, indentNodeProp, foldNodeProp,
-         foldInside, bracketMatching } from '@codemirror/language';
-import { styleTags, tags as t } from '@lezer/highlight';
+import { LanguageSupport, indentOnInput, bracketMatching } from '@codemirror/language';
 import { Extension } from '@codemirror/state';
 import { keymap } from '@codemirror/view';
 import { linter } from '@codemirror/lint';
@@ -16,82 +14,7 @@ export const bibtexBracketMatching = bracketMatching({
   brackets: "()[]{}"
 });
 
-export const bibtexLanguage = LRLanguage.define({
-  parser: parser.configure({
-    props: [
-      indentNodeProp.add({
-        Entry: context => context.baseIndent + context.unit,
-        Field: context => context.baseIndent + context.unit,
-        ConcatNode: context => context.baseIndent + context.unit,
-        BracedNode: context => context.baseIndent + context.unit,
-        QuotedNode: context => context.baseIndent + context.unit
-      }),
-      foldNodeProp.add({
-        Entry: foldInside,
-        BracedNode: foldInside,
-        QuotedNode: foldInside
-      }),
-      styleTags({
-        // Entry types
-        '@article': t.definitionKeyword,
-        '@book': t.definitionKeyword,
-        '@incollection': t.definitionKeyword,
-        '@inproceedings': t.definitionKeyword,
-        '@conference': t.definitionKeyword,
-        '@misc': t.definitionKeyword,
-        '@manual': t.definitionKeyword,
-        '@mastersthesis': t.definitionKeyword,
-        '@phdthesis': t.definitionKeyword,
-        '@techreport': t.definitionKeyword,
-        '@unpublished': t.definitionKeyword,
-        '@online': t.definitionKeyword,
-        '@webpage': t.definitionKeyword,
-        '@booklet': t.definitionKeyword,
-        '@proceedings': t.definitionKeyword,
-
-        // Special entries
-        '@string': t.keyword,
-        '@preamble': t.keyword,
-        '@comment': t.comment,
-
-        // Entry key (citation key)
-        'EntryKey': t.atom,
-
-        // Field names
-        'FieldName': t.propertyName,
-
-        // Field values
-        'StringValue': t.string,
-        'NumberValue': t.number,
-        'BracedValue': t.string,
-        'QuotedValue': t.string,
-
-        // Delimiters
-        '{': t.brace,
-        '}': t.brace,
-        '"': t.quote,
-        '=': t.operator,
-        ',': t.separator,
-        '#': t.operator,
-
-        // Comments
-        Comment: t.comment,
-
-        // Variable references
-        'VariableRef': t.variableName,
-
-        // Special characters
-        'Whitespace': t.content,
-        'Normal': t.content
-      })
-    ]
-  }),
-  languageData: {
-    commentTokens: { line: "%" },
-    closeBrackets: { brackets: ["(", "[", "{", "'", '"'] },
-    wordChars: "-_"
-  }
-});
+export const bibtexLanguage = parser;
 
 export function bibtex(config: {
   enableLinting?: boolean,
@@ -107,9 +30,11 @@ export function bibtex(config: {
     ...config
   };
 
-  const extensions: Extension[] = [];
+  const extensions: Extension[] = [
+    indentOnInput(),
+    bibtexBracketMatching
+  ];
 
-  // Add autocomplete extension
   if (options.enableAutocomplete) {
     extensions.push(
       bibtexLanguage.data.of({
@@ -124,8 +49,6 @@ export function bibtex(config: {
       keymap.of(completionKeymap)
     );
   }
-
-  extensions.push(bibtexBracketMatching);
 
   if (options.autoCloseBrackets) {
     extensions.push(closeBrackets());

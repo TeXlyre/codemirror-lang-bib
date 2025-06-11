@@ -1,6 +1,6 @@
 # CodeMirror 6 BibTeX Language Support
 
-This package provides BibTeX language support for the [CodeMirror 6](https://codemirror.net/6/) code editor, designed to work seamlessly with academic writing workflows and bibliography management.
+This package provides BibTeX language support for the [CodeMirror 6](https://codemirror.net/6/) code editor, designed to work with academic writing workflows and bibliography management.
 
 ## Features
 

@@ -256,3 +256,20 @@
   color: #005cc5;
   font-weight: bold;
 }
+
+/* LaTeX and math highlighting */
+.cm-meta {
+  color: #d73a49;
+  font-weight: bold;
+}
+
+.cm-link {
+  color: #0366d6;
+  text-decoration: underline;
+}
+
+/* Math mode content */
+.cm-string.cm-math {
+  color: #005cc5;
+  font-style: italic;
+}

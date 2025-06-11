@@ -1,7 +1,245 @@
 // src/bibtex-parser.ts
-import { LRParser } from '@lezer/lr';
+import { StreamLanguage } from '@codemirror/language';
 
-// Node types from the BibTeX AST
+export interface BibtexParseState {
+  inEntry: boolean;
+  entryType: string;
+  braceDepth: number;
+  inField: boolean;
+  inValue: boolean;
+  valueType: 'quoted' | 'braced' | 'literal' | null;
+  inMath: boolean;
+  mathDelimiter: '$$' | '$' | null;
+}
+
+const bibtexLanguage = {
+  startState(): BibtexParseState {
+    return {
+      inEntry: false,
+      entryType: '',
+      braceDepth: 0,
+      inField: false,
+      inValue: false,
+      valueType: null,
+      inMath: false,
+      mathDelimiter: null
+    };
+  },
+
+  token(stream: any, state: BibtexParseState) {
+    if (stream.eatSpace()) return null;
+
+    // Comments
+    if (stream.match(/^%.*$/)) {
+      return 'comment';
+    }
+
+    // Math mode handling (only inside field values)
+    if (state.inValue) {
+      // Check for math delimiters
+      if (stream.match(/^\$\$/)) {
+        if (state.inMath && state.mathDelimiter === '$$') {
+          state.inMath = false;
+          state.mathDelimiter = null;
+        } else if (!state.inMath) {
+          state.inMath = true;
+          state.mathDelimiter = '$$';
+        }
+        return 'meta';
+      }
+
+      if (stream.match(/^\$/)) {
+        if (state.inMath && state.mathDelimiter === '$') {
+          state.inMath = false;
+          state.mathDelimiter = null;
+        } else if (!state.inMath) {
+          state.inMath = true;
+          state.mathDelimiter = '$';
+        }
+        return 'meta';
+      }
+
+      // Inside math mode
+      if (state.inMath) {
+        // LaTeX commands
+        if (stream.match(/^\\[a-zA-Z]+/)) {
+          return 'keyword';
+        }
+
+        // LaTeX symbols
+        if (stream.match(/^\\[^a-zA-Z\s]/)) {
+          return 'keyword';
+        }
+
+        // Math content
+        if (stream.match(/^[^$\\]+/)) {
+          return 'string';
+        }
+
+        // If we hit something we don't recognize in math mode, consume one character
+        if (!stream.eol()) {
+          stream.next();
+          return 'string';
+        }
+      }
+
+      // URLs and DOIs (only when not in math mode)
+      if (!state.inMath) {
+        if (stream.match(/^https?:\/\/[^\s,}]+/)) {
+          return 'link';
+        }
+
+        if (stream.match(/^doi:\s*[^\s,}]+/i)) {
+          return 'link';
+        }
+
+        if (stream.match(/^10\.\d+\/[^\s,}]+/)) {
+          return 'link';
+        }
+
+        // LaTeX commands outside math mode
+        if (stream.match(/^\\[a-zA-Z]+\*?/)) {
+          return 'keyword';
+        }
+
+        // LaTeX symbols and escapes
+        if (stream.match(/^\\[^a-zA-Z\s]/)) {
+          return 'keyword';
+        }
+      }
+    }
+
+    // Entry start
+    if (stream.match(/^@([a-zA-Z]+)/)) {
+      state.inEntry = true;
+      state.entryType = stream.current().substring(1).toLowerCase();
+      return 'keyword';
+    }
+
+    // Entry key
+    if (state.inEntry && !state.inField && stream.match(/^[a-zA-Z0-9_:.-]+/)) {
+      return 'atom';
+    }
+
+    // Field names
+    if (state.inEntry && stream.match(/^[a-zA-Z_][a-zA-Z0-9_]*/)) {
+      state.inField = true;
+      return 'property';
+    }
+
+    // Operators
+    if (stream.eat('=')) {
+      state.inValue = true;
+      return 'operator';
+    }
+
+    if (stream.eat(',')) {
+      state.inField = false;
+      state.inValue = false;
+      state.valueType = null;
+      state.inMath = false;
+      state.mathDelimiter = null;
+      return 'punctuation';
+    }
+
+    if (stream.eat('#')) {
+      return 'operator';
+    }
+
+    // Braces
+    if (stream.eat('{')) {
+      state.braceDepth++;
+      if (state.inValue && !state.valueType) {
+        state.valueType = 'braced';
+      }
+      return 'brace';
+    }
+
+    if (stream.eat('}')) {
+      state.braceDepth--;
+      if (state.braceDepth === 0) {
+        state.inEntry = false;
+        state.inField = false;
+        state.inValue = false;
+        state.valueType = null;
+        state.inMath = false;
+        state.mathDelimiter = null;
+      }
+      return 'brace';
+    }
+
+    // Quotes
+    if (stream.eat('"')) {
+      if (state.inValue) {
+        if (state.valueType === 'quoted') {
+          state.valueType = null;
+          state.inValue = false;
+          state.inMath = false;
+          state.mathDelimiter = null;
+        } else {
+          state.valueType = 'quoted';
+        }
+      }
+      return 'string';
+    }
+
+    // String values
+    if (state.inValue && state.valueType === 'quoted') {
+      if (stream.match(/^[^"\\$]+/)) {
+        return 'string';
+      }
+      if (stream.eat('\\')) {
+        stream.next();
+        return 'string';
+      }
+    }
+
+    // Braced values
+    if (state.inValue && state.valueType === 'braced') {
+      if (stream.match(/^[^{}\\$]+/)) {
+        return 'string';
+      }
+      if (stream.eat('\\')) {
+        stream.next();
+        return 'string';
+      }
+    }
+
+    // Numbers
+    if (state.inValue && stream.match(/^\d+/)) {
+      return 'number';
+    }
+
+    // Variable references
+    if (state.inValue && stream.match(/^[a-zA-Z_][a-zA-Z0-9_]*/)) {
+      return 'variableName';
+    }
+
+    stream.next();
+    return null;
+  }
+};
+
+export const parser = StreamLanguage.define(bibtexLanguage);
+
+export function isEntryType(type: string): boolean {
+  const entryTypes = [
+    'article', 'book', 'incollection', 'inproceedings', 'conference',
+    'misc', 'manual', 'mastersthesis', 'phdthesis', 'techreport',
+    'unpublished', 'online', 'webpage', 'booklet', 'proceedings'
+  ];
+  return entryTypes.includes(type.toLowerCase());
+}
+
+export function getFieldType(fieldName: string): 'required' | 'optional' | 'unknown' {
+  const commonRequired = ['author', 'title', 'year'];
+  const commonOptional = ['pages', 'volume', 'number', 'month', 'note', 'doi', 'url', 'isbn'];
+
+  if (commonRequired.includes(fieldName.toLowerCase())) return 'required';
+  if (commonOptional.includes(fieldName.toLowerCase())) return 'optional';
+  return 'unknown';
+}
+
 export interface RootNode {
   type: 'root';
   children: (TextNode | BlockNode)[];
@@ -95,56 +333,3 @@ export interface QuotedNode {
 export type Node = RootNode | TextNode | BlockNode | EntryNode | CommentNode |
                    PreambleNode | StringNode | FieldNode | ConcatNode |
                    LiteralNode | BracedNode | QuotedNode;
-
-// Simple parser implementation that creates a minimal Lezer-compatible parser
-// This is a simplified version for CodeMirror integration
-export const parser = LRParser.deserialize({
-  version: 14,
-  states: "$qOVQPOOOVQPO'#CoOWQPO'#CpOXQPO'#CqOYQPO'#CrOZQPO'#CsO[QPO'#CtO]QPO'#CuO_QPO'#CvO`QPO'#CwOaQPO'#CxObQPO'#CyOcQPO'#CzOdQPO'#C{OeQPO'#C|OfQPO'#C}OgQPO'#DOOhQPO'#DPOiQPO'#DQOjQPO'#DROkQPO'#DSOlQPO'#DTOmQPO'#DUOnQPO'#DVOoQPO'#DWOpQPO'#DXOqQPO'#DYOrQPO'#DZOsQPO'#D[OtQPO'#D]OuQPO'#D^OvQPO'#D_OwQPO'#D`OxQPO'#DaOyQPO'#DbOzQPO'#DcO{QPO'#DdO|QPO'#DeO}QPO'#DfO!OQPO'#DgO!PQPO'#DhO!QQPO'#DiO!RQPO'#DjO!SQPO'#DkO!TQPO'#DlO!UQPO'#DmO!VQPO'#DnO!WQPO'#DoOOQO'#Dp'#DpOOQO'#Dq'#DqOOQO'#Dr'#DrOOQO'#Ds'#DsOOQO'#Dt'#DtOOQO'#Du'#DuOOQO'#Dv'#DvOOQO'#Dw'#DwOOQO'#Dx'#DxOOQO'#Dy'#DyOOQO'#Dz'#DzOOQO'#D{'#D{OOQO'#D|'#D|OOQO'#D}'#D}OOQO'#EO'#EOOOQO'#EP'#EPOOQO'#EQ'#EQOOQO'#ER'#EROOQO'#ES'#ESOOQO'#ET'#ETOOQO'#EU'#EUOOQO'#EV'#EVOOQO'#EW'#EWOOQO'#EX'#EXOOQO'#EY'#EYOOQO'#EZ'#EZOOQO'#E['#E[OOQO'#E]'#E]OOQO'#E^'#E^OOQO'#E_'#E_OOQO'#E`'#E`OOQO'#Ea'#EaOOQO'#Eb'#EbOOQO'#Ec'#EcOOQO'#Ed'#EdOOQO'#Ee'#EeOOQO'#Ef'#EfOOQO'#Eg'#EgOOQO'#Eh'#EhOOQO'#Ei'#EiOOQO'#Ej'#EjOOQO'#Ek'#EkOOQO'#El'#ElOOQO'#Em'#EmOOQO'#En'#EnOOQO'#Eo'#EoOOQO'#Ep'#EpOOQO'#Eq'#EqOOQO'#Er'#ErOOQO'#Es'#EsOOQO'#Et'#EtOOQO'#Eu'#EuOOQO'#Ev'#EvOOQO'#Ew'#EwOOQO'#Ex'#ExOOQO'#Ey'#EyOOQO'#Ez'#EzOOQO'#E{'#E{OOQO'#E|'#E|OOQO'#E}'#E}OOQO'#FO'#FOOOQO'#FP'#FPOOQO'#FQ'#FQOOQO'#FR'#FROOQO'#FS'#FSOOQO'#FT'#FTOOQO'#FU'#FUOOQO'#FV'#FVOOQO'#FW'#FWOOQO'#FX'#FXOOQO'#FY'#FYOOQO'#FZ'#FZOOQO'#F['#F[OOQO'#F]'#F]OOQO'#F^'#F^OOQO'#F_'#F_OOQO'#F`'#F`OOQO'#Fa'#FaOOQO'#Fb'#FbOOQO'#Fc'#FcOOQO'#Fd'#FdOOQO'#Fe'#FeOOQO'#Ff'#FfOOQO'#Fg'#FgOOQO'#Fh'#FhOOQO'#Fi'#FiOOQO'#Fj'#FjOOQO'#Fk'#FkOOQO'#Fl'#FlOOQO'#Fm'#FmOOQO'#Fn'#FnOOQO'#Fo'#FoOOQO'#Fp'#FpOOQO'#Fq'#FqOOQO'#Fr'#FrOOQO'#Fs'#FsOOQO'#Ft'#FtOOQO'#Fu'#FuOOQO'#Fv'#FvOOQO'#Fw'#FwOOQO'#Fx'#FxOOQO'#Fy'#FyOOQO'#Fz'#FzOOQO'#F{'#F{OOQO'#F|'#F|OOQO'#F}'#F}OOQO'#GO'#GOOOQO'#GP'#GPOOQO'#GQ'#GQOOQO'#GR'#GROOQO'#GS'#GSOOQO'#GT'#GTOOQO'#GU'#GUOOQO'#GV'#GVOOQO'#GW'#GWOOQO'#GX'#GXOOQO'#GY'#GYOOQO'#GZ'#GZOOQO'#G['#G[OOQO'#G]'#G]OOQO'#G^'#G^OOQO'#G_'#G_OOQO'#G`'#G`OOQO'#Ga'#GaOOQO'#Gb'#GbOOQO'#Gc'#GcOOQO'#Gd'#GdOOQO'#Ge'#GeOOQO'#Gf'#GfOOQO'#Gg'#GgOOQO'#Gh'#GhOOQO'#Gi'#GiOOQO'#Gj'#GjOOQO'#Gk'#GkOOQO'#Gl'#GlOOQO'#Gm'#GmOOQO'#Gn'#GnOOQO'#Go'#GoOOQO'#Gp'#GpOOQO'#Gq'#GqOOQO'#Gr'#GrOOQO'#Gs'#GsOOQO'#Gt'#GtOOQO'#Gu'#GuOOQO'#Gv'#GvOOQO'#Gw'#GwOOQO'#Gx'#GxOOQO'#Gy'#GyOOQO'#Gz'#GzOOQO'#G{'#G{OOQO'#G|'#G|OOQO'#G}'#G}OOQO'#HO'#HOOOQO'#HP'#HPOOQO'#HQ'#HQOOQO'#HR'#HROOQO'#HS'#HSOOQO'#HT'#HTOOQO'#HU'#HUOOQO'#HV'#HVOOQO'#HW'#HWOOQO'#HX'#HXOOQO'#HY'#HYOOQO'#HZ'#HZOOQO'#H['#H[OOQO'#H]'#H]OOQO'#H^'#H^OOQO'#H_'#H_OOQO'#H`'#H`OOQO'#Ha'#HaOOQO'#Hb'#HbOOQO'#Hc'#HcOOQO'#Hd'#HdOOQO'#He'#HeOOQO'#Hf'#HfOOQO'#Hg'#HgOOQO'#Hh'#HhOOQO'#Hi'#HiOOQO'#Hj'#HjOOQO'#Hk'#HkOOQO'#Hl'#HlOOQO'#Hm'#HmOOQO'#Hn'#HnOOQO'#Ho'#HoOOQO'#Hp'#HpOOQO'#Hq'#HqOOQO'#Hr'#HrOOQO'#Hs'#HsOOQO'#Ht'#HtOOQO'#Hu'#HuOOQO'#Hv'#HvOOQO'#Hw'#HwOOQO'#Hx'#HxOOQO'#Hy'#HyOOQO'#Hz'#HzOOQO'#H{'#H{OOQO'#H|'#H|OOQO'#H}'#H}OOQO'#IO'#IOOOQO'#IP'#IPOOQO'#IQ'#IQOOQO'#IR'#IROOQO'#IS'#ISOOQO'#IT'#ITOOQO'#IU'#IUOOQO'#IV'#IVOOQO'#IW'#IWOOQO'#IX'#IXOOQO'#IY'#IYOOQO'#IZ'#IZOOQO'#I['#I[OOQO'#I]'#I]OOQO'#I^'#I^OOQO'#I_'#I_OOQO'#I`'#I`OOQO'#Ia'#IaOOQO'#Ib'#IbOOQO'#Ic'#IcOOQO'#Id'#IdOOQO'#Ie'#IeOOQO'#If'#IfOOQO'#Ig'#IgOOQO'#Ih'#IhOOQO'#Ii'#IiOOQO'#Ij'#IjOOQO'#Ik'#IkOOQO'#Il'#IlOOQO'#Im'#ImOOQO'#In'#InOOQO'#Io'#IoOOQO'#Ip'#IpOOQO'#Iq'#IqOOQO'#Ir'#IrOOQO'#Is'#IsOOQO'#It'#ItOOQO'#Iu'#IuOOQO'#Iv'#IvOOQO'#Iw'#IwOOQO'#Ix'#IxOOQO'#Iy'#IyOOQO'#Iz'#IzOOQO'#I{'#I{OOQO'#I|'#I|OOQO'#I}'#I}OOQO'#JO'#JOOOQO'#JP'#JPOOQO'#JQ'#JQOOQO'#JR'#JROOQO'#JS'#JSOOQO'#JT'#JTOOQO'#JU'#JUOOQO'#JV'#JVOOQO'#JW'#JWOOQO'#JX'#JXOOQO'#JY'#JYOOQO'#JZ'#JZOOQO'#J['#J[OOQO'#J]'#J]OOQO'#J^'#J^OOQO'#J_'#J_OOQO'#J`'#J`OOQO'#Ja'#JaOOQO'#Jb'#JbOOQO'#Jc'#JcOOQO'#Jd'#JdOOQO'#Je'#JeOOQO'#Jf'#JfOOQO'#Jg'#JgOOQO'#Jh'#JhOOQO'#Ji'#JiOOQO'#Jj'#JjOOQO'#Jk'#JkOOQO'#Jl'#JlOOQO'#Jm'#JmOOQO'#Jn'#JnOOQO'#Jo'#JoOOQO'#Jp'#JpOOQO'#Jq'#JqOOQO'#Jr'#JrOOQO'#Js'#JsOOQO'#Jt'#JtOOQO'#Ju'#JuOOQO'#Jv'#JvOOQO'#Jw'#JwOOQO'#Jx'#JxOOQO'#Jy'#JyOOQO'#Jz'#JzOOQO'#J{'#J{OOQO'#J|'#J|OOQO'#J}'#J}OOQO'#KO'#KOOOQO'#KP'#KPOOQO'#KQ'#KQOOQO'#KR'#KROOQO'#KS'#KS",
-  stateData: "!^OOO",
-  goto: "O^PPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPP",
-  nodeNames: "⚠ BibTeX Root Text Block Entry EntryType EntryKey Field FieldName FieldValue StringValue NumberValue BracedValue QuotedValue ConcatValue Comment Preamble String Whitespace @ { } , = # \" \\",
-  maxTerm: 26,
-  nodeProps: [
-    ["group", -1,1,"Entry"]
-  ],
-  repeatNodeCount: 0,
-  tokenData: "!MOOO",
-  tokenizers: [],
-  topRules: {"BibTeX":[0,1]},
-  specialized: [],
-  tokenPrec: 0
-});
-
-// Helper functions for working with BibTeX AST
-export function isEntryType(type: string): boolean {
-  const entryTypes = [
-    'article', 'book', 'incollection', 'inproceedings', 'conference',
-    'misc', 'manual', 'mastersthesis', 'phdthesis', 'techreport',
-    'unpublished', 'online', 'webpage', 'booklet', 'proceedings'
-  ];
-  return entryTypes.includes(type.toLowerCase());
-}
-
-export function getFieldType(fieldName: string): 'required' | 'optional' | 'unknown' {
-  const requiredFields: Record<string, string[]> = {
-    'article': ['author', 'title', 'journal', 'year'],
-    'book': ['author', 'title', 'publisher', 'year'],
-    'inproceedings': ['author', 'title', 'booktitle', 'year'],
-    'misc': ['title']
-  };
-
-  const optionalFields: Record<string, string[]> = {
-    'article': ['volume', 'number', 'pages', 'month', 'note', 'doi', 'url'],
-    'book': ['volume', 'series', 'address', 'edition', 'month', 'note', 'isbn'],
-    'inproceedings': ['pages', 'organization', 'publisher', 'address', 'month', 'note']
-  };
-
-  // This is a simplified check - in practice you'd need the entry type context
-  const commonRequired = ['author', 'title', 'year'];
-  const commonOptional = ['pages', 'volume', 'number', 'month', 'note', 'doi', 'url', 'isbn'];
-
-  if (commonRequired.includes(fieldName.toLowerCase())) return 'required';
-  if (commonOptional.includes(fieldName.toLowerCase())) return 'optional';
-  return 'unknown';
-}

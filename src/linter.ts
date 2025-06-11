@@ -9,7 +9,6 @@ interface FieldRequirement {
   optional: string[];
 }
 
-// Field requirements by entry type
 const fieldRequirements: Record<string, FieldRequirement> = {
   'article': {
     required: ['author', 'title', 'journal', 'year'],
@@ -69,14 +68,12 @@ const fieldRequirements: Record<string, FieldRequirement> = {
   }
 };
 
-// Valid entry types
 const validEntryTypes = new Set([
   'article', 'book', 'booklet', 'conference', 'inbook', 'incollection',
   'inproceedings', 'manual', 'mastersthesis', 'misc', 'online', 'phdthesis',
   'proceedings', 'techreport', 'unpublished', 'webpage'
 ]);
 
-// Common field names that should be recognized
 const validFieldNames = new Set([
   'author', 'title', 'journal', 'year', 'publisher', 'booktitle', 'editor',
   'pages', 'volume', 'number', 'series', 'edition', 'month', 'note', 'key',
@@ -107,28 +104,24 @@ export function bibtexLinter(options: {
     const diagnostics: Diagnostic[] = [];
     const tree = syntaxTree(view.state);
     const doc = view.state.doc;
-    const entryKeys = new Map<string, number>(); // key -> first occurrence position
+    const entryKeys = new Map<string, number>();
 
-    // Parse BibTeX entries using a simple regex approach
-    // In a full implementation, you'd use the actual parser
     const entries = parseBibtexEntries(doc.toString());
 
     entries.forEach(entry => {
       const entryStart = entry.start;
       const entryEnd = entry.end;
 
-      // Check entry type validity
       if (opts.checkEntryTypes && !validEntryTypes.has(entry.type.toLowerCase())) {
         diagnostics.push({
           from: entryStart,
-          to: entryStart + entry.type.length + 1, // +1 for @
+          to: entryStart + entry.type.length + 1,
           severity: 'warning',
           message: `Unknown entry type: @${entry.type}`,
           source: 'BibTeX'
         });
       }
 
-      // Check for duplicate keys
       if (opts.checkDuplicateKeys && entry.key) {
         if (entryKeys.has(entry.key)) {
           diagnostics.push({
@@ -143,7 +136,6 @@ export function bibtexLinter(options: {
         }
       }
 
-      // Check required and unknown fields
       if (opts.checkRequiredFields || opts.checkUnknownFields) {
         const requirements = fieldRequirements[entry.type.toLowerCase()];
 
@@ -177,13 +169,10 @@ export function bibtexLinter(options: {
         }
       }
 
-      // Check field syntax
       if (opts.checkFieldSyntax) {
         entry.fields.forEach(field => {
-          // Check for unmatched braces in field values
           if (field.value) {
-            const braceCount = (field.value.match(/\{/g) || []).length -
-                              (field.value.match(/\}/g) || []).length;
+            const braceCount = countUnmatchedBraces(field.value);
             if (braceCount !== 0) {
               diagnostics.push({
                 from: field.valueStart,
@@ -195,7 +184,6 @@ export function bibtexLinter(options: {
             }
           }
 
-          // Check for empty field values
           if (!field.value || field.value.trim() === '') {
             diagnostics.push({
               from: field.valueStart,
@@ -213,7 +201,58 @@ export function bibtexLinter(options: {
   };
 }
 
-// Simple BibTeX parser for linting purposes
+function countUnmatchedBraces(value: string): number {
+  let count = 0;
+  let inMath = false;
+  let mathDelimiter = '';
+  let i = 0;
+
+  while (i < value.length) {
+    const char = value[i];
+    const nextChar = value[i + 1];
+
+    if (!inMath) {
+      if (char === '$' && nextChar === '$') {
+        inMath = true;
+        mathDelimiter = '$$';
+        i += 2;
+        continue;
+      } else if (char === '$') {
+        inMath = true;
+        mathDelimiter = '$';
+        i++;
+        continue;
+      }
+    } else {
+      if (mathDelimiter === '$$' && char === '$' && nextChar === '$') {
+        inMath = false;
+        mathDelimiter = '';
+        i += 2;
+        continue;
+      } else if (mathDelimiter === '$' && char === '$') {
+        inMath = false;
+        mathDelimiter = '';
+        i++;
+        continue;
+      }
+    }
+
+    if (char === '\\') {
+      i += 2;
+      continue;
+    }
+
+    if (!inMath) {
+      if (char === '{') count++;
+      else if (char === '}') count--;
+    }
+
+    i++;
+  }
+
+  return count;
+}
+
 interface BibtexEntry {
   type: string;
   key: string;
@@ -243,7 +282,6 @@ function parseBibtexEntries(text: string): BibtexEntry[] {
     const entryKey = match[2] || '';
     const entryStart = match.index;
 
-    // Find the end of this entry by matching braces
     let braceCount = 1;
     let pos = match.index + match[0].length;
     let entryEnd = text.length;
@@ -258,7 +296,6 @@ function parseBibtexEntries(text: string): BibtexEntry[] {
       pos++;
     }
 
-    // Parse fields within this entry
     const entryContent = text.slice(match.index + match[0].length, entryEnd - 1);
     const fields = parseFields(entryContent, match.index + match[0].length);
 
@@ -278,29 +315,118 @@ function parseBibtexEntries(text: string): BibtexEntry[] {
 
 function parseFields(content: string, baseOffset: number): BibtexField[] {
   const fields: BibtexField[] = [];
-  const fieldRegex = /([a-zA-Z_][a-zA-Z0-9_]*)\s*=\s*([^,}]+)/g;
-  let match;
+  let pos = 0;
 
-  while ((match = fieldRegex.exec(content)) !== null) {
-    const fieldName = match[1];
-    const fieldValue = match[2].trim();
+  while (pos < content.length) {
+    pos = skipWhitespace(content, pos);
+    if (pos >= content.length) break;
 
-    // Remove quotes or braces from value for content checking
-    let cleanValue = fieldValue;
-    if ((cleanValue.startsWith('"') && cleanValue.endsWith('"')) ||
-        (cleanValue.startsWith('{') && cleanValue.endsWith('}'))) {
-      cleanValue = cleanValue.slice(1, -1);
+    if (content[pos] === ',') {
+      pos++;
+      continue;
     }
 
-    fields.push({
-      name: fieldName,
-      value: cleanValue,
-      nameStart: baseOffset + match.index,
-      nameEnd: baseOffset + match.index + fieldName.length,
-      valueStart: baseOffset + match.index + match[0].indexOf(fieldValue),
-      valueEnd: baseOffset + match.index + match[0].indexOf(fieldValue) + fieldValue.length
-    });
+    const fieldNameMatch = content.slice(pos).match(/^([a-zA-Z_][a-zA-Z0-9_]*)/);
+    if (!fieldNameMatch) {
+      pos++;
+      continue;
+    }
+
+    const fieldName = fieldNameMatch[1];
+    const nameStart = baseOffset + pos;
+    const nameEnd = nameStart + fieldName.length;
+    pos += fieldName.length;
+
+    pos = skipWhitespace(content, pos);
+    if (pos >= content.length || content[pos] !== '=') {
+      continue;
+    }
+    pos++; // skip '='
+
+    pos = skipWhitespace(content, pos);
+    if (pos >= content.length) break;
+
+    const valueResult = parseFieldValue(content, pos);
+    if (valueResult) {
+      fields.push({
+        name: fieldName,
+        value: valueResult.value,
+        nameStart,
+        nameEnd,
+        valueStart: baseOffset + pos,
+        valueEnd: baseOffset + valueResult.endPos
+      });
+      pos = valueResult.endPos;
+    } else {
+      pos++;
+    }
   }
 
   return fields;
+}
+
+function parseFieldValue(content: string, startPos: number): { value: string; endPos: number } | null {
+  let pos = startPos;
+
+  if (pos >= content.length) return null;
+
+  const char = content[pos];
+
+  if (char === '{') {
+    let braceCount = 1;
+    let valueStart = pos + 1;
+    pos++;
+
+    while (pos < content.length && braceCount > 0) {
+      if (content[pos] === '\\') {
+        pos += 2;
+        continue;
+      }
+      if (content[pos] === '{') braceCount++;
+      else if (content[pos] === '}') braceCount--;
+      pos++;
+    }
+
+    if (braceCount === 0) {
+      return {
+        value: content.slice(valueStart, pos - 1),
+        endPos: pos
+      };
+    }
+  } else if (char === '"') {
+    let valueStart = pos + 1;
+    pos++;
+
+    while (pos < content.length) {
+      if (content[pos] === '\\') {
+        pos += 2;
+        continue;
+      }
+      if (content[pos] === '"') {
+        pos++;
+        return {
+          value: content.slice(valueStart, pos - 1),
+          endPos: pos
+        };
+      }
+      pos++;
+    }
+  } else {
+    const valueMatch = content.slice(pos).match(/^([a-zA-Z_][a-zA-Z0-9_]*|\d+)/);
+    if (valueMatch) {
+      return {
+        value: valueMatch[1],
+        endPos: pos + valueMatch[1].length
+      };
+    }
+  }
+
+  return null;
+}
+
+function skipWhitespace(content: string, pos: number): number {
+  while (pos < content.length && /\s/.test(content[pos])) {
+    pos++;
+  }
+  return pos;
 }
