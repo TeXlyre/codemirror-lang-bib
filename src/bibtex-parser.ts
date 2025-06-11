@@ -97,6 +97,11 @@ const bibtexLanguage = {
           return 'link';
         }
 
+        // LaTeX character escapes (e.g., {"o}, {"a}, etc.)
+        if (stream.match(/^\{\"[a-zA-Z]\}/)) {
+          return 'string';
+        }
+
         // LaTeX commands outside math mode
         if (stream.match(/^\\[a-zA-Z]+\*?/)) {
           return 'keyword';
