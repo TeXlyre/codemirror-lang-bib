@@ -103,6 +103,34 @@ export const snippets: readonly Completion[] = [
     apply: "@book{${0:key},\n\tauthor = {${1:author}},\n\ttitle = {${2:title}},\n\tpublisher = {${3:publisher}},\n\tyear = {${4:year}},\n\taddress = {${5:address}}\n}",
   },
   {
+    label: "@booklet",
+    type: "keyword",
+    detail: "Printed work without publisher",
+    info: "Create a booklet entry",
+    apply: "@booklet{${0:key},\n\ttitle = {${1:title}},\n\tauthor = {${2:author}},\n\thowpublished = {${3:howpublished}},\n\tyear = {${4:year}}\n}",
+  },
+  {
+    label: "@conference",
+    type: "keyword",
+    detail: "Conference paper (alias for inproceedings)",
+    info: "Create a conference paper entry",
+    apply: "@conference{${0:key},\n\tauthor = {${1:author}},\n\ttitle = {${2:title}},\n\tbooktitle = {${3:booktitle}},\n\tyear = {${4:year}},\n\tpages = {${5:pages}},\n\torganization = {${6:organization}}\n}",
+  },
+  {
+    label: "@inbook",
+    type: "keyword",
+    detail: "Part of a book with its own title",
+    info: "Create an inbook entry",
+    apply: "@inbook{${0:key},\n\tauthor = {${1:author}},\n\ttitle = {${2:title}},\n\tbooktitle = {${3:booktitle}},\n\tpublisher = {${4:publisher}},\n\tyear = {${5:year}},\n\tpages = {${6:pages}}\n}",
+  },
+  {
+    label: "@incollection",
+    type: "keyword",
+    detail: "Part of a book having its own title",
+    info: "Create an incollection entry",
+    apply: "@incollection{${0:key},\n\tauthor = {${1:author}},\n\ttitle = {${2:title}},\n\tbooktitle = {${3:booktitle}},\n\tpublisher = {${4:publisher}},\n\tyear = {${5:year}},\n\tpages = {${6:pages}}\n}",
+  },
+  {
     label: "@inproceedings",
     type: "keyword",
     detail: "Conference paper",
@@ -110,18 +138,67 @@ export const snippets: readonly Completion[] = [
     apply: "@inproceedings{${0:key},\n\tauthor = {${1:author}},\n\ttitle = {${2:title}},\n\tbooktitle = {${3:booktitle}},\n\tyear = {${4:year}},\n\tpages = {${5:pages}},\n\torganization = {${6:organization}}\n}",
   },
   {
+    label: "@manual",
+    type: "keyword",
+    detail: "Technical documentation",
+    info: "Create a manual entry",
+    apply: "@manual{${0:key},\n\ttitle = {${1:title}},\n\tauthor = {${2:author}},\n\torganization = {${3:organization}},\n\tyear = {${4:year}}\n}",
+  },
+  {
+    label: "@mastersthesis",
+    type: "keyword",
+    detail: "Master's thesis",
+    info: "Create a master's thesis entry",
+    apply: "@mastersthesis{${0:key},\n\tauthor = {${1:author}},\n\ttitle = {${2:title}},\n\tschool = {${3:school}},\n\tyear = {${4:year}}\n}",
+  },
+  {
     label: "@misc",
     type: "keyword",
     detail: "Miscellaneous",
     info: "Create a miscellaneous entry",
-    apply: "@misc{${0:key},\n\tauthor = {${1:author}},\n\ttitle = {${2:title}},\n\tyear = {${3:year}},\n\tnote = {${4:note}}\n}",
+    apply: "@misc{${0:key},\n\ttitle = {${1:title}},\n\tauthor = {${2:author}},\n\tyear = {${3:year}},\n\tnote = {${4:note}}\n}",
   },
   {
     label: "@online",
     type: "keyword",
     detail: "Online resource",
     info: "Create an online resource entry",
-    apply: "@online{${0:key},\n\tauthor = {${1:author}},\n\ttitle = {${2:title}},\n\turl = {${3:url}},\n\turldate = {${4:date}},\n\tyear = {${5:year}}\n}",
+    apply: "@online{${0:key},\n\tauthor = {${1:author}},\n\ttitle = {${2:title}},\n\turl = {${3:url}},\n\turldate = {${4:urldate}},\n\tyear = {${5:year}}\n}",
+  },
+  {
+    label: "@phdthesis",
+    type: "keyword",
+    detail: "PhD dissertation",
+    info: "Create a PhD thesis entry",
+    apply: "@phdthesis{${0:key},\n\tauthor = {${1:author}},\n\ttitle = {${2:title}},\n\tschool = {${3:school}},\n\tyear = {${4:year}}\n}",
+  },
+  {
+    label: "@proceedings",
+    type: "keyword",
+    detail: "Conference proceedings",
+    info: "Create a proceedings entry",
+    apply: "@proceedings{${0:key},\n\ttitle = {${1:title}},\n\tyear = {${2:year}},\n\teditor = {${3:editor}},\n\torganization = {${4:organization}}\n}",
+  },
+  {
+    label: "@techreport",
+    type: "keyword",
+    detail: "Technical report",
+    info: "Create a technical report entry",
+    apply: "@techreport{${0:key},\n\tauthor = {${1:author}},\n\ttitle = {${2:title}},\n\tinstitution = {${3:institution}},\n\tyear = {${4:year}},\n\tnumber = {${5:number}}\n}",
+  },
+  {
+    label: "@unpublished",
+    type: "keyword",
+    detail: "Unpublished work",
+    info: "Create an unpublished entry",
+    apply: "@unpublished{${0:key},\n\tauthor = {${1:author}},\n\ttitle = {${2:title}},\n\tnote = {${3:note}},\n\tyear = {${4:year}}\n}",
+  },
+  {
+    label: "@webpage",
+    type: "keyword",
+    detail: "Web page (alias for online)",
+    info: "Create a webpage entry",
+    apply: "@webpage{${0:key},\n\tauthor = {${1:author}},\n\ttitle = {${2:title}},\n\turl = {${3:url}},\n\turldate = {${4:urldate}},\n\tyear = {${5:year}}\n}",
   }
 ];
 
@@ -192,6 +269,15 @@ function isTypingEntryType(context: CompletionContext): boolean {
   return /@[a-zA-Z]*$/.test(textBefore);
 }
 
+// Checks if completion is at the start of a line for new entry creation
+function isNewEntryContext(context: CompletionContext): boolean {
+  const textBefore = context.state.sliceDoc(
+    Math.max(0, context.pos - 50),
+    context.pos
+  );
+  return /(?:^|\n)\s*@[a-zA-Z]*$/.test(textBefore);
+}
+
 // Checks if we're typing a field name
 function isTypingFieldName(context: CompletionContext): boolean {
   const textBefore = context.state.sliceDoc(
@@ -234,19 +320,34 @@ export function bibtexCompletionSource(context: CompletionContext): CompletionRe
   if (isTypingEntryType(context)) {
     const entryMatch = context.matchBefore(/@([a-zA-Z]*)$/);
     if (entryMatch) {
-      const options = entryTypes.map(type => ({
-        label: '@' + type,
-        type: "keyword",
-        apply: `@${type}{$\{0:key},\n\t$\{1:field} = {$\{2:value}}\n}`,
-        boost: 1
-      }));
+      const isNewEntry = isNewEntryContext(context);
 
-      // Add snippets to entry types
-      const allOptions = [...options, ...snippets];
+      let options: Completion[];
+
+      if (isNewEntry) {
+        // For new entries, provide both simple completions and full snippets
+        const simpleOptions = entryTypes.map(type => ({
+          label: '@' + type,
+          type: "keyword",
+          apply: `@${type}`,
+          boost: 1
+        }));
+
+        // Combine simple completions with snippets (snippets get lower boost)
+        options = [...simpleOptions, ...snippets.map(snippet => ({ ...snippet, boost: 1 }))];
+      } else {
+        // For partial completion, only provide simple type completion
+        options = entryTypes.map(type => ({
+          label: '@' + type,
+          type: "keyword",
+          apply: `@${type}`,
+          boost: 0.5
+        }));
+      }
 
       return {
         from: entryMatch.from,
-        options: allOptions,
+        options,
         validFor: /^@?[a-zA-Z]*$/
       };
     }
