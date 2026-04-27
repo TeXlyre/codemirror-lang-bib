@@ -1,0 +1,75 @@
+@top File { entry* }
+
+entry {
+  StringEntry |
+  PreambleEntry |
+  CommentEntry |
+  Entry
+}
+
+StringEntry {
+  @specialize<EntryType, "@string"> "{" StringName "=" Value "}"
+}
+
+PreambleEntry {
+  @specialize<EntryType, "@preamble"> "{" Value "}"
+}
+
+CommentEntry {
+  @specialize<EntryType, "@comment"> commentBlock
+}
+
+@skip {} {
+  commentBlock { "{" CommentBody? "}" }
+}
+
+Entry {
+  EntryType "{" EntryKey ("," Field)* ","? "}"
+}
+
+Field {
+  FieldName "=" Value
+}
+
+Value {
+  ValueAtom (Concat ValueAtom)*
+}
+
+ValueAtom {
+  BracedValue |
+  QuotedValue |
+  Number |
+  StringRef
+}
+
+@skip {} {
+  BracedValue { "{" bracedContent* "}" }
+  QuotedValue { "\"" quotedContent* "\"" }
+}
+
+bracedContent { BracedValue | Escape | bracedText }
+quotedContent { BracedValue | Escape | quotedText }
+
+EntryKey { identifier }
+FieldName { identifier }
+StringName { identifier }
+StringRef { identifier }
+
+@tokens {
+  EntryType { "@" $[a-zA-Z]+ }
+
+  identifier { $[a-zA-Z_] $[a-zA-Z0-9_:./-]* }
+
+  Number { $[0-9]+ }
+  Concat { "#" }
+  Escape { "\\" _ }
+
+  bracedText { ![{}\\]+ }
+  quotedText { !["{\\]+ }
+  CommentBody { ![}]+ }
+
+  Comment { "%" ![\n]* }
+  whitespace { $[ \t\r\n]+ }
+}
+
+@skip { whitespace | Comment }

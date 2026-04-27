@@ -10,7 +10,9 @@ module.exports = {
     clean: true
   },
   devServer: {
-    static: './dist',
+    static: {
+      directory: path.join(__dirname, 'dist'),
+    },
     hot: true,
     port: 3000
   },
@@ -37,13 +39,11 @@ module.exports = {
     }),
   ],
   resolve: {
-    // This will help webpack find the extension in the parent directory
     modules: [
       'node_modules',
       path.resolve(__dirname, '../../node_modules'),
       path.resolve(__dirname, '../..')
     ],
-    // Add this to ensure single instance of codemirror modules
     alias: {
       '@codemirror/state': path.resolve(__dirname, '../../node_modules/@codemirror/state'),
       '@codemirror/view': path.resolve(__dirname, '../../node_modules/@codemirror/view'),

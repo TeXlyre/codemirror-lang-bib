@@ -1,432 +1,287 @@
 // src/linter.ts
 import { Diagnostic } from '@codemirror/lint';
 import { EditorView } from '@codemirror/view';
+import { Text } from '@codemirror/state';
 import { syntaxTree } from '@codemirror/language';
-import { SyntaxNode } from '@lezer/common';
+import { SyntaxNode, Tree } from '@lezer/common';
 
-interface FieldRequirement {
-  required: string[];
-  optional: string[];
+import {
+  ignoredFields,
+  validEntryTypes,
+  validFieldNames,
+  fieldRequirements,
+  FieldRequirement
+} from './fields';
+
+export interface BibtexLinterOptions {
+  checkRequiredFields?: boolean;
+  checkUnknownFields?: boolean;
+  checkDuplicateKeys?: boolean;
+  checkFieldSyntax?: boolean;
+  checkEntryTypes?: boolean;
 }
 
-const fieldRequirements: Record<string, FieldRequirement> = {
-  'article': {
-    required: ['author', 'title', 'journal', 'year'],
-    optional: ['volume', 'number', 'pages', 'month', 'note', 'doi', 'url', 'editor']
-  },
-  'book': {
-    required: ['author', 'title', 'publisher', 'year'],
-    optional: ['volume', 'series', 'address', 'edition', 'month', 'note', 'isbn', 'editor']
-  },
-  'inproceedings': {
-    required: ['author', 'title', 'booktitle', 'year'],
-    optional: ['editor', 'pages', 'organization', 'publisher', 'address', 'month', 'note']
-  },
-  'incollection': {
-    required: ['author', 'title', 'booktitle', 'publisher', 'year'],
-    optional: ['editor', 'pages', 'chapter', 'address', 'month', 'note']
-  },
-  'conference': {
-    required: ['author', 'title', 'booktitle', 'year'],
-    optional: ['editor', 'pages', 'organization', 'publisher', 'address', 'month', 'note']
-  },
-  'phdthesis': {
-    required: ['author', 'title', 'school', 'year'],
-    optional: ['address', 'month', 'note', 'type']
-  },
-  'mastersthesis': {
-    required: ['author', 'title', 'school', 'year'],
-    optional: ['address', 'month', 'note', 'type']
-  },
-  'techreport': {
-    required: ['author', 'title', 'institution', 'year'],
-    optional: ['type', 'number', 'address', 'month', 'note']
-  },
-  'manual': {
-    required: ['title'],
-    optional: ['author', 'organization', 'address', 'edition', 'month', 'year', 'note']
-  },
-  'misc': {
-    required: ['title'],
-    optional: ['author', 'howpublished', 'month', 'year', 'note', 'url']
-  },
-  'online': {
-    required: ['title', 'url'],
-    optional: ['author', 'year', 'month', 'urldate', 'note']
-  },
-  'unpublished': {
-    required: ['author', 'title', 'note'],
-    optional: ['month', 'year']
-  },
-  'booklet': {
-    required: ['title'],
-    optional: ['author', 'howpublished', 'address', 'month', 'year', 'note']
-  },
-  'proceedings': {
-    required: ['title', 'year'],
-    optional: ['editor', 'publisher', 'organization', 'address', 'month', 'note']
-  }
+interface ResolvedOptions extends Required<BibtexLinterOptions> { }
+
+const DEFAULTS: ResolvedOptions = {
+  checkRequiredFields: true,
+  checkUnknownFields: true,
+  checkDuplicateKeys: true,
+  checkFieldSyntax: true,
+  checkEntryTypes: true
 };
 
-const validEntryTypes = new Set([
-  'article', 'book', 'booklet', 'conference', 'inbook', 'incollection',
-  'inproceedings', 'manual', 'mastersthesis', 'misc', 'online', 'phdthesis',
-  'proceedings', 'techreport', 'unpublished', 'webpage'
-]);
+function reportSyntaxErrors(tree: Tree, diagnostics: Diagnostic[]): void {
+  const reported = new Set<number>();
+  tree.cursor().iterate(node => {
+    if (!node.type.isError) return;
+    if (reported.has(node.from)) return;
+    reported.add(node.from);
+    const to = node.to > node.from ? node.to : node.from + 1;
+    diagnostics.push({
+      from: node.from,
+      to,
+      severity: 'error',
+      message: 'Syntax error',
+      source: 'BibTeX'
+    });
+  });
+}
 
-const validFieldNames = new Set([
-  'author', 'title', 'journal', 'year', 'publisher', 'booktitle', 'editor',
-  'pages', 'volume', 'number', 'series', 'edition', 'month', 'note', 'key',
-  'address', 'annote', 'chapter', 'crossref', 'doi', 'eprint', 'howpublished',
-  'institution', 'isbn', 'issn', 'keywords', 'language', 'organization',
-  'school', 'type', 'url', 'urldate', 'abstract', 'archiveprefix',
-  'primaryclass', 'eid', 'numpages'
-]);
-
-export function bibtexLinter(options: {
-  checkRequiredFields?: boolean,
-  checkUnknownFields?: boolean,
-  checkDuplicateKeys?: boolean,
-  checkFieldSyntax?: boolean,
-  checkEntryTypes?: boolean
-} = {}) {
-  const defaultOptions = {
-    checkRequiredFields: true,
-    checkUnknownFields: true,
-    checkDuplicateKeys: true,
-    checkFieldSyntax: true,
-    checkEntryTypes: true
-  };
-
-  const opts = { ...defaultOptions, ...options };
+export function bibtexLinter(options: BibtexLinterOptions = {}) {
+  const opts: ResolvedOptions = { ...DEFAULTS, ...options };
 
   return (view: EditorView): Diagnostic[] => {
     const diagnostics: Diagnostic[] = [];
     const tree = syntaxTree(view.state);
     const doc = view.state.doc;
-    const entryKeys = new Map<string, number>();
+    const seenKeys = new Map<string, number>();
 
-    const entries = parseBibtexEntries(doc.toString());
-
-    entries.forEach(entry => {
-      const entryStart = entry.start;
-      const entryEnd = entry.end;
-
-      if (opts.checkEntryTypes && !validEntryTypes.has(entry.type.toLowerCase())) {
-        diagnostics.push({
-          from: entryStart,
-          to: entryStart + entry.type.length + 1,
-          severity: 'warning',
-          message: `Unknown entry type: @${entry.type}`,
-          source: 'BibTeX'
-        });
-      }
-
-      if (opts.checkDuplicateKeys && entry.key) {
-        if (entryKeys.has(entry.key)) {
-          diagnostics.push({
-            from: entry.keyStart || entryStart,
-            to: entry.keyEnd || entryStart + entry.key.length,
-            severity: 'error',
-            message: `Duplicate entry key: ${entry.key}`,
-            source: 'BibTeX'
-          });
-        } else {
-          entryKeys.set(entry.key, entry.keyStart || entryStart);
-        }
-      }
-
-      if (opts.checkRequiredFields || opts.checkUnknownFields) {
-        const requirements = fieldRequirements[entry.type.toLowerCase()];
-
-        if (requirements && opts.checkRequiredFields) {
-          const presentFields = new Set(entry.fields.map(f => f.name.toLowerCase()));
-          const missingRequired = requirements.required.filter(req => !presentFields.has(req));
-
-          if (missingRequired.length > 0) {
-            diagnostics.push({
-              from: entryStart,
-              to: entryEnd,
-              severity: 'error',
-              message: `Missing required fields for @${entry.type}: ${missingRequired.join(', ')}`,
-              source: 'BibTeX'
-            });
-          }
-        }
-
-        if (opts.checkUnknownFields) {
-          entry.fields.forEach(field => {
-            if (!validFieldNames.has(field.name.toLowerCase())) {
-              diagnostics.push({
-                from: field.nameStart,
-                to: field.nameEnd,
-                severity: 'warning',
-                message: `Unknown field: ${field.name}`,
-                source: 'BibTeX'
-              });
-            }
-          });
-        }
-      }
-
-      if (opts.checkFieldSyntax) {
-        entry.fields.forEach(field => {
-          if (field.value) {
-            const braceCount = countUnmatchedBraces(field.value);
-            if (braceCount !== 0) {
-              diagnostics.push({
-                from: field.valueStart,
-                to: field.valueEnd,
-                severity: 'error',
-                message: `Unmatched braces in field value for '${field.name}'`,
-                source: 'BibTeX'
-              });
-            }
-          }
-
-          if (!field.value || field.value.trim() === '') {
-            diagnostics.push({
-              from: field.valueStart,
-              to: field.valueEnd,
-              severity: 'warning',
-              message: `Empty value for field '${field.name}'`,
-              source: 'BibTeX'
-            });
-          }
-        });
+    tree.cursor().iterate(node => {
+      if (node.name === 'Entry') {
+        checkEntry(node.node, doc, diagnostics, seenKeys, opts);
+        return false;
       }
     });
+
+    if (opts.checkFieldSyntax) {
+      reportSyntaxErrors(tree, diagnostics);
+    }
 
     return diagnostics;
   };
 }
 
-function countUnmatchedBraces(value: string): number {
-  let count = 0;
-  let inMath = false;
-  let mathDelimiter = '';
-  let i = 0;
+function checkEntry(
+  entry: SyntaxNode,
+  doc: Text,
+  diagnostics: Diagnostic[],
+  seenKeys: Map<string, number>,
+  opts: ResolvedOptions
+): void {
+  const typeNode = entry.getChild('EntryType');
+  const keyNode = entry.getChild('EntryKey');
 
-  while (i < value.length) {
-    const char = value[i];
-    const nextChar = value[i + 1];
+  if (!typeNode) return;
 
-    if (!inMath) {
-      if (char === '$' && nextChar === '$') {
-        inMath = true;
-        mathDelimiter = '$$';
-        i += 2;
-        continue;
-      } else if (char === '$') {
-        inMath = true;
-        mathDelimiter = '$';
-        i++;
-        continue;
-      }
-    } else {
-      if (mathDelimiter === '$$' && char === '$' && nextChar === '$') {
-        inMath = false;
-        mathDelimiter = '';
-        i += 2;
-        continue;
-      } else if (mathDelimiter === '$' && char === '$') {
-        inMath = false;
-        mathDelimiter = '';
-        i++;
-        continue;
-      }
-    }
+  const rawType = doc.sliceString(typeNode.from, typeNode.to);
+  const entryType = rawType.replace(/^@/, '').toLowerCase();
 
-    if (char === '\\') {
-      i += 2;
-      continue;
-    }
-
-    if (!inMath) {
-      if (char === '{') count++;
-      else if (char === '}') count--;
-    }
-
-    i++;
-  }
-
-  return count;
-}
-
-interface BibtexEntry {
-  type: string;
-  key: string;
-  keyStart: number;
-  keyEnd: number;
-  start: number;
-  end: number;
-  fields: BibtexField[];
-}
-
-interface BibtexField {
-  name: string;
-  value: string;
-  nameStart: number;
-  nameEnd: number;
-  valueStart: number;
-  valueEnd: number;
-}
-
-function parseBibtexEntries(text: string): BibtexEntry[] {
-  const entries: BibtexEntry[] = [];
-  const entryRegex = /@([a-zA-Z]+)\s*\{\s*([^,\s}]+)?/g;
-  let match;
-
-  while ((match = entryRegex.exec(text)) !== null) {
-    const entryType = match[1];
-    const entryKey = match[2] || '';
-    const entryStart = match.index;
-
-    let braceCount = 1;
-    let pos = match.index + match[0].length;
-    let entryEnd = text.length;
-
-    while (pos < text.length && braceCount > 0) {
-      if (text[pos] === '{') braceCount++;
-      else if (text[pos] === '}') braceCount--;
-      if (braceCount === 0) {
-        entryEnd = pos + 1;
-        break;
-      }
-      pos++;
-    }
-
-    const entryContent = text.slice(match.index + match[0].length, entryEnd - 1);
-    const fields = parseFields(entryContent, match.index + match[0].length);
-
-    entries.push({
-      type: entryType,
-      key: entryKey,
-      keyStart: match.index + match[0].indexOf(entryKey),
-      keyEnd: match.index + match[0].indexOf(entryKey) + entryKey.length,
-      start: entryStart,
-      end: entryEnd,
-      fields
+  if (opts.checkEntryTypes && !validEntryTypes.has(entryType)) {
+    diagnostics.push({
+      from: typeNode.from,
+      to: typeNode.to,
+      severity: 'warning',
+      message: `Unknown entry type: @${entryType}`,
+      source: 'BibTeX'
     });
   }
 
-  return entries;
+  if (opts.checkDuplicateKeys && keyNode) {
+    const key = doc.sliceString(keyNode.from, keyNode.to);
+    if (seenKeys.has(key)) {
+      diagnostics.push({
+        from: keyNode.from,
+        to: keyNode.to,
+        severity: 'error',
+        message: `Duplicate entry key: ${key}`,
+        source: 'BibTeX'
+      });
+    } else {
+      seenKeys.set(key, keyNode.from);
+    }
+  }
+
+  const fields = collectFields(entry, doc);
+  const presentNames = new Set(fields.map(f => f.name.toLowerCase()));
+
+  if (opts.checkRequiredFields) {
+    const requirements = fieldRequirements[entryType];
+    if (requirements) {
+      const crossRefField = ['crossref', 'xref', 'xdata', 'related']
+        .find(name => presentNames.has(name));
+      reportMissingRequired(entry, presentNames, requirements, diagnostics, crossRefField);
+    }
+  }
+
+  if (opts.checkUnknownFields || opts.checkFieldSyntax) {
+    for (const field of fields) {
+      const lower = field.name.toLowerCase();
+
+      if (ignoredFields.has(lower)) continue;
+
+      if (opts.checkUnknownFields && !validFieldNames.has(lower)) {
+        diagnostics.push({
+          from: field.nameFrom,
+          to: field.nameTo,
+          severity: 'warning',
+          message: `Unknown field: ${field.name}`,
+          source: 'BibTeX'
+        });
+      }
+
+      if (opts.checkFieldSyntax) {
+        if (field.hasError) {
+          diagnostics.push({
+            from: field.valueFrom,
+            to: field.valueTo,
+            severity: 'error',
+            message: `Syntax error in value for field '${field.name}'`,
+            source: 'BibTeX'
+          });
+        } else if (field.isEmpty) {
+          diagnostics.push({
+            from: field.valueFrom,
+            to: field.valueTo,
+            severity: 'warning',
+            message: `Empty value for field '${field.name}'`,
+            source: 'BibTeX'
+          });
+        }
+      }
+    }
+  }
 }
 
-function parseFields(content: string, baseOffset: number): BibtexField[] {
-  const fields: BibtexField[] = [];
-  let pos = 0;
+interface CollectedField {
+  name: string;
+  nameFrom: number;
+  nameTo: number;
+  valueFrom: number;
+  valueTo: number;
+  isEmpty: boolean;
+  hasError: boolean;
+}
 
-  while (pos < content.length) {
-    pos = skipWhitespace(content, pos);
-    if (pos >= content.length) break;
+function collectFields(entry: SyntaxNode, doc: Text): CollectedField[] {
+  const fields: CollectedField[] = [];
 
-    if (content[pos] === ',') {
-      pos++;
-      continue;
-    }
+  for (const fieldNode of entry.getChildren('Field')) {
+    const nameNode = fieldNode.getChild('FieldName');
+    const valueNode = fieldNode.getChild('Value');
+    if (!nameNode) continue;
 
-    const fieldNameMatch = content.slice(pos).match(/^([a-zA-Z_][a-zA-Z0-9_]*)/);
-    if (!fieldNameMatch) {
-      pos++;
-      continue;
-    }
+    const valueFrom = valueNode ? valueNode.from : nameNode.to;
+    const valueTo = valueNode ? valueNode.to : nameNode.to;
+    const valueText = valueNode ? doc.sliceString(valueNode.from, valueNode.to) : '';
 
-    const fieldName = fieldNameMatch[1];
-    const nameStart = baseOffset + pos;
-    const nameEnd = nameStart + fieldName.length;
-    pos += fieldName.length;
-
-    pos = skipWhitespace(content, pos);
-    if (pos >= content.length || content[pos] !== '=') {
-      continue;
-    }
-    pos++; // skip '='
-
-    pos = skipWhitespace(content, pos);
-    if (pos >= content.length) break;
-
-    const valueResult = parseFieldValue(content, pos);
-    if (valueResult) {
-      fields.push({
-        name: fieldName,
-        value: valueResult.value,
-        nameStart,
-        nameEnd,
-        valueStart: baseOffset + pos,
-        valueEnd: baseOffset + valueResult.endPos
-      });
-      pos = valueResult.endPos;
-    } else {
-      pos++;
-    }
+    fields.push({
+      name: doc.sliceString(nameNode.from, nameNode.to),
+      nameFrom: nameNode.from,
+      nameTo: nameNode.to,
+      valueFrom,
+      valueTo,
+      isEmpty: !valueNode || stripBracesAndQuotes(valueText).trim() === '',
+      hasError: valueNode ? hasErrorNode(valueNode) : false
+    });
   }
 
   return fields;
 }
 
-function parseFieldValue(content: string, startPos: number): { value: string; endPos: number } | null {
-  let pos = startPos;
+function reportMissingRequired(
+  entry: SyntaxNode,
+  present: Set<string>,
+  requirements: FieldRequirement,
+  diagnostics: Diagnostic[],
+  crossRefField?: string
+): void {
+  const missingErrors: string[] = [];
+  const missingWarnings: string[] = [];
 
-  if (pos >= content.length) return null;
+  for (const required of requirements.required) {
+    if (!present.has(required)) missingErrors.push(required);
+  }
 
-  const char = content[pos];
-
-  if (char === '{') {
-    let braceCount = 1;
-    let valueStart = pos + 1;
-    pos++;
-
-    while (pos < content.length && braceCount > 0) {
-      if (content[pos] === '\\') {
-        pos += 2;
-        continue;
+  if (requirements.alternatives) {
+    for (const alt of requirements.alternatives) {
+      const fields = Array.isArray(alt) ? alt : alt.fields;
+      const severity = Array.isArray(alt) ? 'error' : alt.severity;
+      if (!fields.some(name => present.has(name))) {
+        const label = fields.join(' or ');
+        if (severity === 'warning') {
+          missingWarnings.push(label);
+        } else {
+          missingErrors.push(label);
+        }
       }
-      if (content[pos] === '{') braceCount++;
-      else if (content[pos] === '}') braceCount--;
-      pos++;
-    }
-
-    if (braceCount === 0) {
-      return {
-        value: content.slice(valueStart, pos - 1),
-        endPos: pos
-      };
-    }
-  } else if (char === '"') {
-    let valueStart = pos + 1;
-    pos++;
-
-    while (pos < content.length) {
-      if (content[pos] === '\\') {
-        pos += 2;
-        continue;
-      }
-      if (content[pos] === '"') {
-        pos++;
-        return {
-          value: content.slice(valueStart, pos - 1),
-          endPos: pos
-        };
-      }
-      pos++;
-    }
-  } else {
-    const valueMatch = content.slice(pos).match(/^([a-zA-Z_][a-zA-Z0-9_]*|\d+)/);
-    if (valueMatch) {
-      return {
-        value: valueMatch[1],
-        endPos: pos + valueMatch[1].length
-      };
     }
   }
 
-  return null;
+  if (crossRefField) {
+    if (missingErrors.length > 0 || missingWarnings.length > 0) {
+      const all = [...missingErrors, ...missingWarnings];
+      diagnostics.push({
+        from: entry.from,
+        to: entry.to,
+        severity: 'info',
+        message: `Verify '${crossRefField}' provides: ${all.join(', ')}`,
+        source: 'BibTeX'
+      });
+    }
+    return;
+  }
+
+  if (missingErrors.length > 0) {
+    diagnostics.push({
+      from: entry.from,
+      to: entry.to,
+      severity: 'error',
+      message: `Missing required fields: ${missingErrors.join(', ')}`,
+      source: 'BibTeX'
+    });
+  }
+
+  if (missingWarnings.length > 0) {
+    diagnostics.push({
+      from: entry.from,
+      to: entry.to,
+      severity: 'warning',
+      message: `Recommended fields missing: ${missingWarnings.join(', ')}`,
+      source: 'BibTeX'
+    });
+  }
 }
 
-function skipWhitespace(content: string, pos: number): number {
-  while (pos < content.length && /\s/.test(content[pos])) {
-    pos++;
+function hasErrorNode(node: SyntaxNode): boolean {
+  let found = false;
+  node.cursor().iterate(child => {
+    if (found) return false;
+    if (child.type.isError) {
+      found = true;
+      return false;
+    }
+  });
+  return found;
+}
+
+function stripBracesAndQuotes(text: string): string {
+  const trimmed = text.trim();
+  if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+    return trimmed.slice(1, -1);
   }
-  return pos;
+  if (trimmed.startsWith('"') && trimmed.endsWith('"')) {
+    return trimmed.slice(1, -1);
+  }
+  return trimmed;
 }

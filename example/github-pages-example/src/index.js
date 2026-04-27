@@ -117,49 +117,37 @@ function createEditor() {
   });
 }
 
-// Wait for DOM to be ready
+
 document.addEventListener('DOMContentLoaded', () => {
-  // Create the initial editor
   let editorView = createEditor();
 
-  // Handle option changes
-  document.getElementById('enableLinting').addEventListener('change', e => {
-    currentOptions.enableLinting = e.target.checked;
-    recreateEditor();
-  });
-
-  document.getElementById('enableTooltips').addEventListener('change', e => {
-    currentOptions.enableTooltips = e.target.checked;
-    recreateEditor();
-  });
-
-  document.getElementById('enableAutocomplete').addEventListener('change', e => {
-    currentOptions.enableAutocomplete = e.target.checked;
-    recreateEditor();
-  });
-
-  document.getElementById('autoCloseBrackets').addEventListener('change', e => {
-    currentOptions.autoCloseBrackets = e.target.checked;
-    recreateEditor();
-  });
+  bindCheckbox('enableLinting', v => { currentOptions.enableLinting = v; });
+  bindCheckbox('enableTooltips', v => { currentOptions.enableTooltips = v; });
+  bindCheckbox('enableAutocomplete', v => { currentOptions.enableAutocomplete = v; });
+  bindCheckbox('autoCloseBrackets', v => { currentOptions.autoCloseBrackets = v; });
 
   function recreateEditor() {
-    // Save current content
     const content = editorView.state.doc.toString();
-
-    // Dispose the old editor
     editorView.destroy();
-
-    // Create a new editor with the updated options
     editorView = createEditor();
-
-    // Set the content back
     editorView.dispatch({
       changes: { from: 0, to: editorView.state.doc.length, insert: content }
     });
   }
 
-  // Toolbar button actions
+
+  function bindCheckbox(id, apply) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener('change', (e) => {
+      const target = e.target;
+      if (target instanceof HTMLInputElement) {
+        apply(target.checked);
+        recreateEditor();
+      }
+    });
+  }
+
   document.getElementById('insertArticle').addEventListener('click', () => {
     insertSnippet('@article{key,\n  author = {Author Name},\n  title = {Article Title},\n  journal = {Journal Name},\n  year = {2023},\n  volume = {1},\n  pages = {1--10}\n}\n\n');
   });
@@ -184,4 +172,5 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     editorView.focus();
   }
+
 });

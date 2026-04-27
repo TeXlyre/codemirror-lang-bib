@@ -1,7 +1,7 @@
 // src/tooltips.ts
 import { hoverTooltip, Tooltip } from '@codemirror/view';
 import { syntaxTree } from '@codemirror/language';
-import { SyntaxNode } from '@lezer/common';
+import { ignoredFields } from './fields';
 
 interface EntryTypeInfo {
   description: string;
@@ -226,56 +226,23 @@ const fieldInfoMap: Record<string, FieldInfo> = {
  */
 export const bibtexHoverTooltip = hoverTooltip((view, pos, side) => {
   const tree = syntaxTree(view.state);
-  const node = tree.resolve(pos);
-  const text = view.state.sliceDoc(node.from, node.to);
+  const node = tree.resolveInner(pos, side);
 
-  // Check for entry types (after @)
-  if (node.name === 'EntryType' || isEntryTypeContext(view, pos)) {
-    const entryType = extractEntryType(view, pos);
-    if (entryType) {
-      const info = entryTypeInfoMap[entryType.toLowerCase()];
-      if (info) {
-        return makeEntryTypeTooltip(info, entryType, node.from, node.to);
-      }
-    }
+  if (node.name === 'EntryType') {
+    const text = view.state.sliceDoc(node.from + 1, node.to).toLowerCase();
+    const info = entryTypeInfoMap[text];
+    if (info) return makeEntryTypeTooltip(info, text, node.from, node.to);
   }
 
-  // Check for field names
-  if (node.name === 'FieldName' || isFieldNameContext(view, pos)) {
-    const fieldName = extractFieldName(view, pos);
-    if (fieldName) {
-      const info = fieldInfoMap[fieldName.toLowerCase()];
-      if (info) {
-        return makeFieldTooltip(info, fieldName, node.from, node.to);
-      }
-    }
+  if (node.name === 'FieldName') {
+    const text = view.state.sliceDoc(node.from, node.to).toLowerCase();
+    if (ignoredFields.has(text)) return null;
+    const info = fieldInfoMap[text];
+    if (info) return makeFieldTooltip(info, text, node.from, node.to);
   }
 
   return null;
 });
-
-// Helper functions for context detection
-function isEntryTypeContext(view: any, pos: number): boolean {
-  const textBefore = view.state.sliceDoc(Math.max(0, pos - 20), pos + 20);
-  return /@[a-zA-Z]*/.test(textBefore);
-}
-
-function isFieldNameContext(view: any, pos: number): boolean {
-  const textBefore = view.state.sliceDoc(Math.max(0, pos - 50), pos + 20);
-  return /[a-zA-Z_]+\s*=/.test(textBefore);
-}
-
-function extractEntryType(view: any, pos: number): string | null {
-  const textAround = view.state.sliceDoc(Math.max(0, pos - 20), pos + 20);
-  const match = textAround.match(/@([a-zA-Z]+)/);
-  return match ? match[1] : null;
-}
-
-function extractFieldName(view: any, pos: number): string | null {
-  const textAround = view.state.sliceDoc(Math.max(0, pos - 30), pos + 30);
-  const match = textAround.match(/([a-zA-Z_]+)\s*=/);
-  return match ? match[1] : null;
-}
 
 // Create tooltip for entry types
 function makeEntryTypeTooltip(info: EntryTypeInfo, entryType: string, from: number, to: number): Tooltip {

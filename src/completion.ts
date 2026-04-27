@@ -1,5 +1,6 @@
 // src/completion.ts
-import { Completion, CompletionContext, CompletionResult } from '@codemirror/autocomplete';
+import { Completion, CompletionContext, CompletionResult, snippetCompletion } from '@codemirror/autocomplete';
+import { fieldRequirements, validFieldNames } from './fields';
 
 // BibTeX entry types for autocompletion
 export const entryTypes: readonly string[] = [
@@ -22,50 +23,7 @@ export const entryTypes: readonly string[] = [
 ];
 
 // Common BibTeX field names for autocompletion
-export const fieldNames: readonly string[] = [
-  // Required/common fields
-  'author',
-  'title',
-  'journal',
-  'year',
-  'publisher',
-  'booktitle',
-  'editor',
-  'pages',
-  'volume',
-  'number',
-  'series',
-  'edition',
-  'month',
-  'note',
-  'key',
-
-  // Optional fields
-  'address',
-  'annote',
-  'chapter',
-  'crossref',
-  'doi',
-  'eprint',
-  'howpublished',
-  'institution',
-  'isbn',
-  'issn',
-  'keywords',
-  'language',
-  'organization',
-  'school',
-  'type',
-  'url',
-  'urldate',
-  'abstract',
-
-  // Modern fields
-  'archiveprefix',
-  'primaryclass',
-  'eid',
-  'numpages'
-];
+export const fieldNames: readonly string[] = Array.from(validFieldNames);
 
 // Month abbreviations commonly used in BibTeX
 export const monthAbbreviations: readonly string[] = [
@@ -88,163 +46,43 @@ export const journalAbbreviations: readonly string[] = [
 
 // Define and export snippets for BibTeX
 export const snippets: readonly Completion[] = [
-  {
-    label: "@article",
-    type: "keyword",
-    detail: "Journal article",
-    info: "Create a journal article entry",
-    apply: "@article{${0:key},\n\tauthor = {${1:author}},\n\ttitle = {${2:title}},\n\tjournal = {${3:journal}},\n\tyear = {${4:year}},\n\tvolume = {${5:volume}},\n\tnumber = {${6:number}},\n\tpages = {${7:pages}}\n}",
-  },
-  {
-    label: "@book",
-    type: "keyword",
-    detail: "Book",
-    info: "Create a book entry",
-    apply: "@book{${0:key},\n\tauthor = {${1:author}},\n\ttitle = {${2:title}},\n\tpublisher = {${3:publisher}},\n\tyear = {${4:year}},\n\taddress = {${5:address}}\n}",
-  },
-  {
-    label: "@booklet",
-    type: "keyword",
-    detail: "Printed work without publisher",
-    info: "Create a booklet entry",
-    apply: "@booklet{${0:key},\n\ttitle = {${1:title}},\n\tauthor = {${2:author}},\n\thowpublished = {${3:howpublished}},\n\tyear = {${4:year}}\n}",
-  },
-  {
-    label: "@conference",
-    type: "keyword",
-    detail: "Conference paper (alias for inproceedings)",
-    info: "Create a conference paper entry",
-    apply: "@conference{${0:key},\n\tauthor = {${1:author}},\n\ttitle = {${2:title}},\n\tbooktitle = {${3:booktitle}},\n\tyear = {${4:year}},\n\tpages = {${5:pages}},\n\torganization = {${6:organization}}\n}",
-  },
-  {
-    label: "@inbook",
-    type: "keyword",
-    detail: "Part of a book with its own title",
-    info: "Create an inbook entry",
-    apply: "@inbook{${0:key},\n\tauthor = {${1:author}},\n\ttitle = {${2:title}},\n\tbooktitle = {${3:booktitle}},\n\tpublisher = {${4:publisher}},\n\tyear = {${5:year}},\n\tpages = {${6:pages}}\n}",
-  },
-  {
-    label: "@incollection",
-    type: "keyword",
-    detail: "Part of a book having its own title",
-    info: "Create an incollection entry",
-    apply: "@incollection{${0:key},\n\tauthor = {${1:author}},\n\ttitle = {${2:title}},\n\tbooktitle = {${3:booktitle}},\n\tpublisher = {${4:publisher}},\n\tyear = {${5:year}},\n\tpages = {${6:pages}}\n}",
-  },
-  {
-    label: "@inproceedings",
-    type: "keyword",
-    detail: "Conference paper",
-    info: "Create a conference proceedings entry",
-    apply: "@inproceedings{${0:key},\n\tauthor = {${1:author}},\n\ttitle = {${2:title}},\n\tbooktitle = {${3:booktitle}},\n\tyear = {${4:year}},\n\tpages = {${5:pages}},\n\torganization = {${6:organization}}\n}",
-  },
-  {
-    label: "@manual",
-    type: "keyword",
-    detail: "Technical documentation",
-    info: "Create a manual entry",
-    apply: "@manual{${0:key},\n\ttitle = {${1:title}},\n\tauthor = {${2:author}},\n\torganization = {${3:organization}},\n\tyear = {${4:year}}\n}",
-  },
-  {
-    label: "@mastersthesis",
-    type: "keyword",
-    detail: "Master's thesis",
-    info: "Create a master's thesis entry",
-    apply: "@mastersthesis{${0:key},\n\tauthor = {${1:author}},\n\ttitle = {${2:title}},\n\tschool = {${3:school}},\n\tyear = {${4:year}}\n}",
-  },
-  {
-    label: "@misc",
-    type: "keyword",
-    detail: "Miscellaneous",
-    info: "Create a miscellaneous entry",
-    apply: "@misc{${0:key},\n\ttitle = {${1:title}},\n\tauthor = {${2:author}},\n\tyear = {${3:year}},\n\tnote = {${4:note}}\n}",
-  },
-  {
-    label: "@online",
-    type: "keyword",
-    detail: "Online resource",
-    info: "Create an online resource entry",
-    apply: "@online{${0:key},\n\tauthor = {${1:author}},\n\ttitle = {${2:title}},\n\turl = {${3:url}},\n\turldate = {${4:urldate}},\n\tyear = {${5:year}}\n}",
-  },
-  {
-    label: "@phdthesis",
-    type: "keyword",
-    detail: "PhD dissertation",
-    info: "Create a PhD thesis entry",
-    apply: "@phdthesis{${0:key},\n\tauthor = {${1:author}},\n\ttitle = {${2:title}},\n\tschool = {${3:school}},\n\tyear = {${4:year}}\n}",
-  },
-  {
-    label: "@proceedings",
-    type: "keyword",
-    detail: "Conference proceedings",
-    info: "Create a proceedings entry",
-    apply: "@proceedings{${0:key},\n\ttitle = {${1:title}},\n\tyear = {${2:year}},\n\teditor = {${3:editor}},\n\torganization = {${4:organization}}\n}",
-  },
-  {
-    label: "@techreport",
-    type: "keyword",
-    detail: "Technical report",
-    info: "Create a technical report entry",
-    apply: "@techreport{${0:key},\n\tauthor = {${1:author}},\n\ttitle = {${2:title}},\n\tinstitution = {${3:institution}},\n\tyear = {${4:year}},\n\tnumber = {${5:number}}\n}",
-  },
-  {
-    label: "@unpublished",
-    type: "keyword",
-    detail: "Unpublished work",
-    info: "Create an unpublished entry",
-    apply: "@unpublished{${0:key},\n\tauthor = {${1:author}},\n\ttitle = {${2:title}},\n\tnote = {${3:note}},\n\tyear = {${4:year}}\n}",
-  },
-  {
-    label: "@webpage",
-    type: "keyword",
-    detail: "Web page (alias for online)",
-    info: "Create a webpage entry",
-    apply: "@webpage{${0:key},\n\tauthor = {${1:author}},\n\ttitle = {${2:title}},\n\turl = {${3:url}},\n\turldate = {${4:urldate}},\n\tyear = {${5:year}}\n}",
-  }
+  snippetCompletion(
+    '@article{#{key},\n\tauthor = {#{author}},\n\ttitle = {#{title}},\n\tjournaltitle = {#{journal}},\n\tdate = {#{year}},\n\tvolume = {#{volume}},\n\tnumber = {#{number}},\n\tpages = {#{pages}}\n}',
+    { label: '@article', type: 'keyword', detail: 'Journal article' }
+  ),
+  snippetCompletion(
+    '@book{#{key},\n\tauthor = {#{author}},\n\ttitle = {#{title}},\n\tpublisher = {#{publisher}},\n\tdate = {#{year}},\n\tlocation = {#{location}}\n}',
+    { label: '@book', type: 'keyword', detail: 'Book' }
+  ),
+  snippetCompletion(
+    '@inproceedings{#{key},\n\tauthor = {#{author}},\n\ttitle = {#{title}},\n\tbooktitle = {#{booktitle}},\n\tdate = {#{year}},\n\tpages = {#{pages}}\n}',
+    { label: '@inproceedings', type: 'keyword', detail: 'Conference paper' }
+  ),
+  snippetCompletion(
+    '@incollection{#{key},\n\tauthor = {#{author}},\n\ttitle = {#{title}},\n\tbooktitle = {#{booktitle}},\n\teditor = {#{editor}},\n\tpublisher = {#{publisher}},\n\tdate = {#{year}},\n\tpages = {#{pages}}\n}',
+    { label: '@incollection', type: 'keyword', detail: 'Book chapter' }
+  ),
+  snippetCompletion(
+    '@thesis{#{key},\n\tauthor = {#{author}},\n\ttitle = {#{title}},\n\ttype = {#{phdthesis}},\n\tinstitution = {#{institution}},\n\tdate = {#{year}}\n}',
+    { label: '@thesis', type: 'keyword', detail: 'Thesis (biblatex)' }
+  ),
+  snippetCompletion(
+    '@online{#{key},\n\tauthor = {#{author}},\n\ttitle = {#{title}},\n\turl = {#{url}},\n\turldate = {#{urldate}},\n\tdate = {#{year}}\n}',
+    { label: '@online', type: 'keyword', detail: 'Online resource' }
+  ),
+  snippetCompletion(
+    '@misc{#{key},\n\ttitle = {#{title}},\n\tauthor = {#{author}},\n\tdate = {#{year}},\n\tnote = {#{note}}\n}',
+    { label: '@misc', type: 'keyword', detail: 'Miscellaneous' }
+  ),
+  snippetCompletion(
+    '@manual{#{key},\n\ttitle = {#{title}},\n\tauthor = {#{author}},\n\torganization = {#{organization}},\n\tdate = {#{year}}\n}',
+    { label: '@manual', type: 'keyword', detail: 'Manual' }
+  ),
+  snippetCompletion(
+    '@techreport{#{key},\n\tauthor = {#{author}},\n\ttitle = {#{title}},\n\tinstitution = {#{institution}},\n\tdate = {#{year}},\n\tnumber = {#{number}}\n}',
+    { label: '@techreport', type: 'keyword', detail: 'Technical report' }
+  )
 ];
-
-// Field requirements by entry type
-const fieldRequirements: Record<string, { required: string[], optional: string[] }> = {
-  'article': {
-    required: ['author', 'title', 'journal', 'year'],
-    optional: ['volume', 'number', 'pages', 'month', 'note', 'doi', 'url']
-  },
-  'book': {
-    required: ['author', 'title', 'publisher', 'year'],
-    optional: ['volume', 'series', 'address', 'edition', 'month', 'note', 'isbn']
-  },
-  'inproceedings': {
-    required: ['author', 'title', 'booktitle', 'year'],
-    optional: ['editor', 'pages', 'organization', 'publisher', 'address', 'month', 'note']
-  },
-  'incollection': {
-    required: ['author', 'title', 'booktitle', 'publisher', 'year'],
-    optional: ['editor', 'pages', 'chapter', 'address', 'month', 'note']
-  },
-  'phdthesis': {
-    required: ['author', 'title', 'school', 'year'],
-    optional: ['address', 'month', 'note']
-  },
-  'mastersthesis': {
-    required: ['author', 'title', 'school', 'year'],
-    optional: ['address', 'month', 'note']
-  },
-  'techreport': {
-    required: ['author', 'title', 'institution', 'year'],
-    optional: ['type', 'number', 'address', 'month', 'note']
-  },
-  'manual': {
-    required: ['title'],
-    optional: ['author', 'organization', 'address', 'edition', 'month', 'year', 'note']
-  },
-  'misc': {
-    required: ['title'],
-    optional: ['author', 'howpublished', 'month', 'year', 'note', 'url']
-  },
-  'online': {
-    required: ['title', 'url'],
-    optional: ['author', 'year', 'month', 'urldate', 'note']
-  }
-};
 
 // Checks if we're inside an entry definition
 function isInEntry(context: CompletionContext): boolean {

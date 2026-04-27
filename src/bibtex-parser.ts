@@ -1,5 +1,9 @@
 // src/bibtex-parser.ts
-import { StreamLanguage } from '@codemirror/language';
+import { parser as bibtexParser } from './bibtex.mjs';
+import {
+  LRLanguage, indentNodeProp, foldNodeProp, foldInside
+} from '@codemirror/language';
+import { styleTags, tags as t } from '@lezer/highlight';
 
 export interface BibtexParseState {
   inEntry: boolean;
@@ -12,222 +16,42 @@ export interface BibtexParseState {
   mathDelimiter: '$$' | '$' | null;
 }
 
-const bibtexLanguage = {
-  startState(): BibtexParseState {
-    return {
-      inEntry: false,
-      entryType: '',
-      braceDepth: 0,
-      inField: false,
-      inValue: false,
-      valueType: null,
-      inMath: false,
-      mathDelimiter: null
-    };
-  },
-
-  token(stream: any, state: BibtexParseState) {
-    if (stream.eatSpace()) return null;
-
-    // Comments
-    if (stream.match(/^%.*$/)) {
-      return 'comment';
-    }
-
-    // Math mode handling (only inside field values)
-    if (state.inValue) {
-      // Check for math delimiters
-      if (stream.match(/^\$\$/)) {
-        if (state.inMath && state.mathDelimiter === '$$') {
-          state.inMath = false;
-          state.mathDelimiter = null;
-        } else if (!state.inMath) {
-          state.inMath = true;
-          state.mathDelimiter = '$$';
-        }
-        return 'meta';
-      }
-
-      if (stream.match(/^\$/)) {
-        if (state.inMath && state.mathDelimiter === '$') {
-          state.inMath = false;
-          state.mathDelimiter = null;
-        } else if (!state.inMath) {
-          state.inMath = true;
-          state.mathDelimiter = '$';
-        }
-        return 'meta';
-      }
-
-      // Inside math mode
-      if (state.inMath) {
-        // LaTeX commands
-        if (stream.match(/^\\[a-zA-Z]+/)) {
-          return 'keyword';
-        }
-
-        // LaTeX symbols
-        if (stream.match(/^\\[^a-zA-Z\s]/)) {
-          return 'keyword';
-        }
-
-        // Math content
-        if (stream.match(/^[^$\\]+/)) {
-          return 'string';
-        }
-
-        // If we hit something we don't recognize in math mode, consume one character
-        if (!stream.eol()) {
-          stream.next();
-          return 'string';
-        }
-      }
-
-      // URLs and DOIs (only when not in math mode)
-      if (!state.inMath) {
-        if (stream.match(/^https?:\/\/[^\s,}]+/)) {
-          return 'link';
-        }
-
-        if (stream.match(/^doi:\s*[^\s,}]+/i)) {
-          return 'link';
-        }
-
-        if (stream.match(/^10\.\d+\/[^\s,}]+/)) {
-          return 'link';
-        }
-
-        // LaTeX character escapes (e.g., {"o}, {"a}, etc.)
-        if (stream.match(/^\{\"[a-zA-Z]\}/)) {
-          return 'string';
-        }
-
-        // LaTeX commands outside math mode
-        if (stream.match(/^\\[a-zA-Z]+\*?/)) {
-          return 'keyword';
-        }
-
-        // LaTeX symbols and escapes
-        if (stream.match(/^\\[^a-zA-Z\s]/)) {
-          return 'keyword';
-        }
-      }
-    }
-
-    // Entry start
-    if (stream.match(/^@([a-zA-Z]+)/)) {
-      state.inEntry = true;
-      state.entryType = stream.current().substring(1).toLowerCase();
-      state.inField = false;
-      state.inValue = false;
-      return 'definitionKeyword';
-    }
-
-    // Entry key (citation key) - only immediately after entry type and opening brace
-    if (state.inEntry && !state.inField && !state.inValue && stream.match(/^[a-zA-Z0-9_:.-]+/)) {
-      return 'atom';
-    }
-
-    // Field names - only when we're in an entry but not already in a field
-    if (state.inEntry && !state.inValue && stream.match(/^[a-zA-Z_][a-zA-Z0-9_]*/)) {
-      state.inField = true;
-      return 'propertyName';
-    }
-
-    // Operators
-    if (stream.eat('=')) {
-      state.inValue = true;
-      return 'operator';
-    }
-
-    if (stream.eat(',')) {
-      state.inField = false;
-      state.inValue = false;
-      state.valueType = null;
-      state.inMath = false;
-      state.mathDelimiter = null;
-      return 'punctuation';
-    }
-
-    if (stream.eat('#')) {
-      return 'operator';
-    }
-
-    // Braces
-    if (stream.eat('{')) {
-      state.braceDepth++;
-      if (state.inValue && !state.valueType) {
-        state.valueType = 'braced';
-      }
-      return 'brace';
-    }
-
-    if (stream.eat('}')) {
-      state.braceDepth--;
-      if (state.braceDepth === 0) {
-        state.inEntry = false;
-        state.inField = false;
-        state.inValue = false;
-        state.valueType = null;
-        state.inMath = false;
-        state.mathDelimiter = null;
-      }
-      return 'brace';
-    }
-
-    // Quotes
-    if (stream.eat('"')) {
-      if (state.inValue) {
-        if (state.valueType === 'quoted') {
-          state.valueType = null;
-          state.inValue = false;
-          state.inMath = false;
-          state.mathDelimiter = null;
-        } else {
-          state.valueType = 'quoted';
-        }
-      }
-      return 'quote';
-    }
-
-    // String values
-    if (state.inValue && state.valueType === 'quoted') {
-      if (stream.match(/^[^"\\$]+/)) {
-        return 'string';
-      }
-      if (stream.eat('\\')) {
-        stream.next();
-        return 'string';
-      }
-    }
-
-    // Braced values
-    if (state.inValue && state.valueType === 'braced') {
-      if (stream.match(/^[^{}\\$]+/)) {
-        return 'string';
-      }
-      if (stream.eat('\\')) {
-        stream.next();
-        return 'string';
-      }
-    }
-
-    // Numbers (only when in value context)
-    if (state.inValue && stream.match(/^\d+/)) {
-      return 'number';
-    }
-
-    // Variable references (only when in value context)
-    if (state.inValue && stream.match(/^[a-zA-Z_][a-zA-Z0-9_]*/)) {
-      return 'variableName';
-    }
-
-    stream.next();
-    return null;
+export const parser = LRLanguage.define({
+  parser: bibtexParser.configure({
+    props: [
+      indentNodeProp.add({
+        Entry: ctx => ctx.baseIndent + ctx.unit,
+        StringEntry: ctx => ctx.baseIndent + ctx.unit,
+        BracedValue: ctx => ctx.baseIndent + ctx.unit
+      }),
+      foldNodeProp.add({
+        Entry: foldInside,
+        StringEntry: foldInside,
+        PreambleEntry: foldInside,
+        CommentEntry: foldInside,
+        BracedValue: foldInside
+      }),
+      styleTags({
+        EntryType: t.definitionKeyword,
+        EntryKey: t.atom,
+        FieldName: t.propertyName,
+        StringName: t.propertyName,
+        StringRef: t.variableName,
+        Number: t.number,
+        Concat: t.operator,
+        BracedValue: t.string,
+        QuotedValue: t.string,
+        Escape: t.escape,
+        Comment: t.lineComment,
+        CommentBody: t.lineComment
+      })
+    ]
+  }),
+  languageData: {
+    commentTokens: { line: '%' },
+    closeBrackets: { brackets: ['{', '"'] }
   }
-};
-
-export const parser = StreamLanguage.define(bibtexLanguage);
+});
 
 export function isEntryType(type: string): boolean {
   const entryTypes = [
@@ -338,5 +162,5 @@ export interface QuotedNode {
 }
 
 export type Node = RootNode | TextNode | BlockNode | EntryNode | CommentNode |
-                   PreambleNode | StringNode | FieldNode | ConcatNode |
-                   LiteralNode | BracedNode | QuotedNode;
+  PreambleNode | StringNode | FieldNode | ConcatNode |
+  LiteralNode | BracedNode | QuotedNode;
