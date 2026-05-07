@@ -1,5 +1,4 @@
 // src/fields.ts
-
 export type FieldAlternative = string[] | { fields: string[]; severity: 'error' | 'warning' };
 
 export interface FieldRequirement {

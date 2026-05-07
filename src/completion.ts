@@ -1,50 +1,28 @@
 // src/completion.ts
 import { Completion, CompletionContext, CompletionResult, snippetCompletion } from '@codemirror/autocomplete';
+import { syntaxTree } from '@codemirror/language';
+import { SyntaxNode } from '@lezer/common';
 import { fieldRequirements, validFieldNames } from './fields';
+import { collectDocumentValues, DocumentValues } from './document-values';
 
-// BibTeX entry types for autocompletion
 export const entryTypes: readonly string[] = [
-  'article',
-  'book',
-  'booklet',
-  'conference',
-  'inbook',
-  'incollection',
-  'inproceedings',
-  'manual',
-  'mastersthesis',
-  'misc',
-  'online',
-  'phdthesis',
-  'proceedings',
-  'techreport',
-  'unpublished',
-  'webpage'
+  'article', 'book', 'booklet', 'conference', 'inbook', 'incollection',
+  'inproceedings', 'manual', 'mastersthesis', 'misc', 'online', 'phdthesis',
+  'proceedings', 'techreport', 'unpublished', 'webpage'
 ];
 
-// Common BibTeX field names for autocompletion
 export const fieldNames: readonly string[] = Array.from(validFieldNames);
 
-// Month abbreviations commonly used in BibTeX
 export const monthAbbreviations: readonly string[] = [
   'jan', 'feb', 'mar', 'apr', 'may', 'jun',
   'jul', 'aug', 'sep', 'oct', 'nov', 'dec'
 ];
 
-// Common journal abbreviations
 export const journalAbbreviations: readonly string[] = [
-  'Nature',
-  'Science',
-  'Cell',
-  'PNAS',
-  'J. Am. Chem. Soc.',
-  'Phys. Rev. Lett.',
-  'IEEE Trans.',
-  'ACM Trans.',
-  'Commun. ACM'
+  'Nature', 'Science', 'Cell', 'PNAS', 'J. Am. Chem. Soc.',
+  'Phys. Rev. Lett.', 'IEEE Trans.', 'ACM Trans.', 'Commun. ACM'
 ];
 
-// Define and export snippets for BibTeX
 export const snippets: readonly Completion[] = [
   snippetCompletion(
     '@article{#{key},\n\tauthor = {#{author}},\n\ttitle = {#{title}},\n\tjournaltitle = {#{journal}},\n\tdate = {#{year}},\n\tvolume = {#{volume}},\n\tnumber = {#{number}},\n\tpages = {#{pages}}\n}',
@@ -84,201 +62,189 @@ export const snippets: readonly Completion[] = [
   )
 ];
 
-// Checks if we're inside an entry definition
-function isInEntry(context: CompletionContext): boolean {
-  const textBefore = context.state.sliceDoc(
-    Math.max(0, context.pos - 200),
-    context.pos
-  );
+const VALUE_NODES = new Set(['Value', 'ValueAtom', 'BracedValue', 'QuotedValue', 'Number', 'StringRef']);
+const VALUE_FIELDS_FROM_DOC: Record<string, keyof Pick<DocumentValues,
+  'authors' | 'editors' | 'journals' | 'publishers' | 'schools' |
+  'institutions' | 'organizations' | 'addresses' | 'years'>> = {
+  author: 'authors',
+  editor: 'editors',
+  journal: 'journals',
+  journaltitle: 'journals',
+  shortjournal: 'journals',
+  publisher: 'publishers',
+  school: 'schools',
+  institution: 'institutions',
+  organization: 'organizations',
+  address: 'addresses',
+  location: 'addresses',
+  year: 'years',
+  date: 'years',
+  origyear: 'years'
+};
 
-  const lastAt = textBefore.lastIndexOf('@');
-  const lastBrace = textBefore.lastIndexOf('{');
-  const lastCloseBrace = textBefore.lastIndexOf('}');
-
-  return lastAt !== -1 && lastBrace > lastAt && lastCloseBrace < lastBrace;
-}
-
-// Checks if we're typing an entry type after @
-function isTypingEntryType(context: CompletionContext): boolean {
-  const textBefore = context.state.sliceDoc(
-    Math.max(0, context.pos - 20),
-    context.pos
-  );
-  return /@[a-zA-Z]*$/.test(textBefore);
-}
-
-// Checks if completion is at the start of a line for new entry creation
-function isNewEntryContext(context: CompletionContext): boolean {
-  const textBefore = context.state.sliceDoc(
-    Math.max(0, context.pos - 50),
-    context.pos
-  );
-  return /(?:^|\n)\s*@[a-zA-Z]*$/.test(textBefore);
-}
-
-// Checks if we're typing a field name
-function isTypingFieldName(context: CompletionContext): boolean {
-  const textBefore = context.state.sliceDoc(
-    Math.max(0, context.pos - 50),
-    context.pos
-  );
-
-  // Look for comma or opening brace followed by optional whitespace and identifier
-  return /[,{]\s*[a-zA-Z]*$/.test(textBefore) && isInEntry(context);
-}
-
-// Checks if we're typing a field value
-function isTypingFieldValue(context: CompletionContext): boolean {
-  const textBefore = context.state.sliceDoc(
-    Math.max(0, context.pos - 30),
-    context.pos
-  );
-
-  return /[a-zA-Z_]+\s*=\s*["{]?[^"}]*$/.test(textBefore) && isInEntry(context);
-}
-
-// Gets the current entry type for context-aware field suggestions
-function getCurrentEntryType(context: CompletionContext): string | null {
-  const textBefore = context.state.sliceDoc(0, context.pos);
-  const match = textBefore.match(/@([a-zA-Z]+)\s*{[^}]*$/);
-  return match ? match[1].toLowerCase() : null;
-}
-
-// Main completion function
-export function bibtexCompletionSource(context: CompletionContext): CompletionResult | null {
-  // Check for explicit completion request
-  if (!context.explicit) {
-    const before = context.matchBefore(/@[a-zA-Z]*$|[a-zA-Z_]*$|[a-zA-Z_]+\s*=\s*["{]?[^"}]*$/);
-    if (!before || before.from === before.to) {
-      return null;
-    }
+function findAncestor(node: SyntaxNode, name: string): SyntaxNode | null {
+  let n: SyntaxNode | null = node;
+  while (n) {
+    if (n.name === name) return n;
+    n = n.parent;
   }
-
-  // Entry type completion
-  if (isTypingEntryType(context)) {
-    const entryMatch = context.matchBefore(/@([a-zA-Z]*)$/);
-    if (entryMatch) {
-      const isNewEntry = isNewEntryContext(context);
-
-      let options: Completion[];
-
-      if (isNewEntry) {
-        // For new entries, provide both simple completions and full snippets
-        const simpleOptions = entryTypes.map(type => ({
-          label: '@' + type,
-          type: "keyword",
-          apply: `@${type}`,
-          boost: 1
-        }));
-
-        // Combine simple completions with snippets (snippets get lower boost)
-        options = [...simpleOptions, ...snippets.map(snippet => ({ ...snippet, boost: 1 }))];
-      } else {
-        // For partial completion, only provide simple type completion
-        options = entryTypes.map(type => ({
-          label: '@' + type,
-          type: "keyword",
-          apply: `@${type}`,
-          boost: 0.5
-        }));
-      }
-
-      return {
-        from: entryMatch.from,
-        options,
-        validFor: /^@?[a-zA-Z]*$/
-      };
-    }
-  }
-
-  // Field name completion
-  if (isTypingFieldName(context)) {
-    const fieldMatch = context.matchBefore(/[,{]\s*([a-zA-Z_]*)$/);
-    if (fieldMatch) {
-      const entryType = getCurrentEntryType(context);
-      let availableFields = [...fieldNames];
-
-      // Extract the field name being typed from the full match
-      const fullMatchResult = fieldMatch.text.match(/[,{]\s*([a-zA-Z_]*)$/);
-      const fieldNamePart = fullMatchResult ? fullMatchResult[1] : '';
-
-      // Add context-aware suggestions based on entry type
-      if (entryType && fieldRequirements[entryType]) {
-        const { required, optional } = fieldRequirements[entryType];
-        // Boost required fields for this entry type
-        const options = availableFields.map(field => ({
-          label: field,
-          type: "property",
-          apply: `${field} = {$\{0:value}}`,
-          boost: required.includes(field) ? 2 : (optional.includes(field) ? 1 : 0.5)
-        }));
-
-        return {
-          from: fieldMatch.from + fieldMatch.text.lastIndexOf(fieldNamePart),
-          options,
-          validFor: /^[a-zA-Z_]*$/
-        };
-      }
-
-      const options = availableFields.map(field => ({
-        label: field,
-        type: "property",
-        apply: `${field} = {$\{0:value}}`,
-        boost: 1
-      }));
-
-      return {
-        from: fieldMatch.from + fieldMatch.text.lastIndexOf(fieldNamePart),
-        options,
-        validFor: /^[a-zA-Z_]*$/
-      };
-    }
-  }
-
-  // Field value completion (for specific fields)
-  if (isTypingFieldValue(context)) {
-    const valueMatch = context.matchBefore(/([a-zA-Z_]+)\s*=\s*["{]?([^"}]*)$/);
-    if (valueMatch) {
-      // Extract field name and value from the full match
-      const fullMatchResult = valueMatch.text.match(/([a-zA-Z_]+)\s*=\s*["{]?([^"}]*)$/);
-      if (!fullMatchResult) return null;
-
-      const fieldName = fullMatchResult[1].toLowerCase();
-      const valuePart = fullMatchResult[2];
-
-      // Month field completion
-      if (fieldName === 'month') {
-        const options = monthAbbreviations.map(month => ({
-          label: month,
-          type: "constant",
-          apply: month,
-          boost: 1
-        }));
-
-        return {
-          from: valueMatch.from + valueMatch.text.lastIndexOf(valuePart),
-          options,
-          validFor: /^[a-zA-Z]*$/
-        };
-      }
-
-      // Journal field completion
-      if (fieldName === 'journal') {
-        const options = journalAbbreviations.map(journal => ({
-          label: journal,
-          type: "constant",
-          apply: journal,
-          boost: 1
-        }));
-
-        return {
-          from: valueMatch.from + valueMatch.text.lastIndexOf(valuePart),
-          options,
-          validFor: /^[^"}]*$/
-        };
-      }
-    }
-  }
-
   return null;
+}
+
+function findAncestorIn(node: SyntaxNode, names: Set<string>): SyntaxNode | null {
+  let n: SyntaxNode | null = node;
+  while (n) {
+    if (names.has(n.name)) return n;
+    n = n.parent;
+  }
+  return null;
+}
+
+function getEnclosingFieldName(node: SyntaxNode, doc: { sliceString(from: number, to: number): string }): string | null {
+  const field = findAncestor(node, 'Field');
+  if (!field) return null;
+  const nameNode = field.getChild('FieldName');
+  if (!nameNode) return null;
+  return doc.sliceString(nameNode.from, nameNode.to).toLowerCase();
+}
+
+function getEnclosingEntryType(node: SyntaxNode, doc: { sliceString(from: number, to: number): string }): string | null {
+  const entry = findAncestor(node, 'Entry');
+  if (!entry) return null;
+  const typeNode = entry.getChild('EntryType');
+  if (!typeNode) return null;
+  return doc.sliceString(typeNode.from, typeNode.to).replace(/^@/, '').toLowerCase();
+}
+
+function getPresentFieldNames(node: SyntaxNode, doc: { sliceString(from: number, to: number): string }): Set<string> {
+  const present = new Set<string>();
+  const entry = findAncestor(node, 'Entry');
+  if (!entry) return present;
+  for (const field of entry.getChildren('Field')) {
+    const nameNode = field.getChild('FieldName');
+    if (nameNode) present.add(doc.sliceString(nameNode.from, nameNode.to).toLowerCase());
+  }
+  return present;
+}
+
+function completeEntryType(context: CompletionContext): CompletionResult | null {
+  const match = context.matchBefore(/@[a-zA-Z]*/);
+  if (!match || (match.from === match.to && !context.explicit)) return null;
+
+  const lineStart = context.state.doc.lineAt(match.from).from;
+  const before = context.state.sliceDoc(lineStart, match.from).trim();
+  const isLineStart = before === '';
+
+  const simple: Completion[] = entryTypes.map(type => ({
+    label: '@' + type, type: 'keyword', apply: '@' + type, boost: 1
+  }));
+  const options: Completion[] = isLineStart
+    ? [...simple, ...snippets.map(s => ({ ...s, boost: 0.5 }))]
+    : simple;
+
+  return { from: match.from, options, validFor: /^@?[a-zA-Z]*$/ };
+}
+
+function completeFieldName(
+  context: CompletionContext,
+  inside: SyntaxNode
+): CompletionResult | null {
+  const match = context.matchBefore(/[a-zA-Z_]*/);
+  if (!match) return null;
+
+  const doc = context.state.doc;
+  const present = getPresentFieldNames(inside, doc);
+  const entryType = getEnclosingEntryType(inside, doc);
+  const requirements = entryType ? fieldRequirements[entryType] : undefined;
+
+  const requiredSet = new Set(requirements?.required ?? []);
+  const optionalSet = new Set(requirements?.optional ?? []);
+  if (requirements?.alternatives) {
+    for (const alt of requirements.alternatives) {
+      const fields = Array.isArray(alt) ? alt : alt.fields;
+      for (const f of fields) requiredSet.add(f);
+    }
+  }
+
+  const options: Completion[] = [];
+  for (const name of fieldNames) {
+    if (present.has(name.toLowerCase())) continue;
+    let boost = 0.5;
+    if (requiredSet.has(name)) boost = 2;
+    else if (optionalSet.has(name)) boost = 1;
+    options.push({
+      label: name,
+      type: 'property',
+      apply: `${name} = {$\{0:value}}`,
+      boost
+    });
+  }
+
+  return { from: match.from, options, validFor: /^[a-zA-Z_]*$/ };
+}
+
+function completeFieldValue(
+  context: CompletionContext,
+  inside: SyntaxNode
+): CompletionResult | null {
+  const doc = context.state.doc;
+  const fieldName = getEnclosingFieldName(inside, doc);
+  if (!fieldName) return null;
+
+  const match = context.matchBefore(/[^"{},=\n]*/);
+  const from = match ? match.from : context.pos;
+
+  const docValues = collectDocumentValues(context.state);
+  const options: Completion[] = [];
+  const seen = new Set<string>();
+  const add = (label: string, type: string, boost = 1) => {
+    if (!label || seen.has(label)) return;
+    seen.add(label);
+    options.push({ label, type, apply: label, boost });
+  };
+
+  const bucket = VALUE_FIELDS_FROM_DOC[fieldName];
+  if (bucket) {
+    for (const v of docValues[bucket]) add(v, 'text', 2);
+  }
+
+  const sameField = docValues.byField.get(fieldName);
+  if (sameField) {
+    for (const v of sameField) add(v, 'text', 1.5);
+  }
+
+  if (fieldName === 'month') {
+    for (const m of monthAbbreviations) add(m, 'constant', 1);
+  }
+  if (fieldName === 'journal' || fieldName === 'journaltitle' || fieldName === 'shortjournal') {
+    for (const j of journalAbbreviations) add(j, 'constant', 0.5);
+  }
+  if (fieldName === 'crossref' || fieldName === 'xref') {
+    for (const k of docValues.keys) add(k, 'constant', 1);
+  }
+
+  if (options.length === 0) return null;
+  return { from, options, validFor: /^[^"{},=\n]*$/ };
+}
+
+export function bibtexCompletionSource(context: CompletionContext): CompletionResult | null {
+  const tree = syntaxTree(context.state);
+  const node = tree.resolveInner(context.pos, -1);
+
+  const valueNode = findAncestorIn(node, VALUE_NODES);
+  if (valueNode && findAncestor(valueNode, 'Field')) {
+    return completeFieldValue(context, node);
+  }
+
+  const entry = findAncestor(node, 'Entry');
+  if (entry) {
+    const before = context.state.sliceDoc(Math.max(0, context.pos - 1), context.pos);
+    const explicitAt = context.matchBefore(/@[a-zA-Z]*$/);
+    if (explicitAt) return completeEntryType(context);
+    if (node.name === 'EntryKey' || node.name === 'EntryType') return null;
+    if (!context.explicit && !/[a-zA-Z_,{\s]/.test(before)) return null;
+    return completeFieldName(context, node);
+  }
+
+  return completeEntryType(context);
 }

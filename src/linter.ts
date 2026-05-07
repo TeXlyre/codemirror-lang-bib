@@ -2,7 +2,7 @@
 import { Diagnostic } from '@codemirror/lint';
 import { EditorView } from '@codemirror/view';
 import { Text } from '@codemirror/state';
-import { syntaxTree } from '@codemirror/language';
+import { syntaxTree, ensureSyntaxTree } from '@codemirror/language';
 import { SyntaxNode, Tree } from '@lezer/common';
 
 import {
@@ -21,15 +21,21 @@ export interface BibtexLinterOptions {
   checkEntryTypes?: boolean;
 }
 
-interface ResolvedOptions extends Required<BibtexLinterOptions> { }
-
-const DEFAULTS: ResolvedOptions = {
+const DEFAULTS: Required<BibtexLinterOptions> = {
   checkRequiredFields: true,
   checkUnknownFields: true,
   checkDuplicateKeys: true,
   checkFieldSyntax: true,
   checkEntryTypes: true
 };
+
+const PARSE_BUDGET_MS = 500;
+
+interface KeyOccurrence {
+  from: number;
+  to: number;
+  flagged: boolean;
+}
 
 function reportSyntaxErrors(tree: Tree, diagnostics: Diagnostic[]): void {
   const reported = new Set<number>();
@@ -49,22 +55,23 @@ function reportSyntaxErrors(tree: Tree, diagnostics: Diagnostic[]): void {
 }
 
 export function bibtexLinter(options: BibtexLinterOptions = {}) {
-  const opts: ResolvedOptions = { ...DEFAULTS, ...options };
+  const opts: Required<BibtexLinterOptions> = { ...DEFAULTS, ...options };
 
   return (view: EditorView): Diagnostic[] => {
     const diagnostics: Diagnostic[] = [];
-    const tree = syntaxTree(view.state);
     const doc = view.state.doc;
-    const seenKeys = new Map<string, number>();
+    const tree = ensureSyntaxTree(view.state, doc.length, PARSE_BUDGET_MS) ?? syntaxTree(view.state);
+    const treeComplete = tree.length >= doc.length;
+    const seenKeys = new Map<string, KeyOccurrence>();
 
     tree.cursor().iterate(node => {
       if (node.name === 'Entry') {
-        checkEntry(node.node, doc, diagnostics, seenKeys, opts);
+        checkEntry(node.node, doc, diagnostics, seenKeys, opts, treeComplete);
         return false;
       }
     });
 
-    if (opts.checkFieldSyntax) {
+    if (opts.checkFieldSyntax && treeComplete) {
       reportSyntaxErrors(tree, diagnostics);
     }
 
@@ -76,8 +83,9 @@ function checkEntry(
   entry: SyntaxNode,
   doc: Text,
   diagnostics: Diagnostic[],
-  seenKeys: Map<string, number>,
-  opts: ResolvedOptions
+  seenKeys: Map<string, KeyOccurrence>,
+  opts: Required<BibtexLinterOptions>,
+  treeComplete: boolean
 ): void {
   const typeNode = entry.getChild('EntryType');
   const keyNode = entry.getChild('EntryKey');
@@ -98,24 +106,37 @@ function checkEntry(
   }
 
   if (opts.checkDuplicateKeys && keyNode) {
-    const key = doc.sliceString(keyNode.from, keyNode.to);
-    if (seenKeys.has(key)) {
-      diagnostics.push({
-        from: keyNode.from,
-        to: keyNode.to,
-        severity: 'error',
-        message: `Duplicate entry key: ${key}`,
-        source: 'BibTeX'
-      });
-    } else {
-      seenKeys.set(key, keyNode.from);
+    const key = doc.sliceString(keyNode.from, keyNode.to).trim();
+    if (key) {
+      const existing = seenKeys.get(key);
+      if (existing) {
+        diagnostics.push({
+          from: keyNode.from,
+          to: keyNode.to,
+          severity: 'error',
+          message: `Duplicate entry key: ${key}`,
+          source: 'BibTeX'
+        });
+        if (!existing.flagged) {
+          diagnostics.push({
+            from: existing.from,
+            to: existing.to,
+            severity: 'error',
+            message: `Duplicate entry key: ${key}`,
+            source: 'BibTeX'
+          });
+          existing.flagged = true;
+        }
+      } else {
+        seenKeys.set(key, { from: keyNode.from, to: keyNode.to, flagged: false });
+      }
     }
   }
 
   const fields = collectFields(entry, doc);
   const presentNames = new Set(fields.map(f => f.name.toLowerCase()));
 
-  if (opts.checkRequiredFields) {
+  if (opts.checkRequiredFields && treeComplete) {
     const requirements = fieldRequirements[entryType];
     if (requirements) {
       const crossRefField = ['crossref', 'xref', 'xdata', 'related']
@@ -124,11 +145,26 @@ function checkEntry(
     }
   }
 
-  if (opts.checkUnknownFields || opts.checkFieldSyntax) {
+  if (opts.checkUnknownFields || opts.checkFieldSyntax || opts.checkDuplicateKeys) {
+    const seenFieldNames = new Map<string, number>();
     for (const field of fields) {
       const lower = field.name.toLowerCase();
 
       if (ignoredFields.has(lower)) continue;
+
+      if (opts.checkDuplicateKeys) {
+        if (seenFieldNames.has(lower)) {
+          diagnostics.push({
+            from: field.nameFrom,
+            to: field.nameTo,
+            severity: 'warning',
+            message: `Duplicate field '${field.name}' in entry`,
+            source: 'BibTeX'
+          });
+        } else {
+          seenFieldNames.set(lower, field.nameFrom);
+        }
+      }
 
       if (opts.checkUnknownFields && !validFieldNames.has(lower)) {
         diagnostics.push({

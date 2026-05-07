@@ -34,5 +34,8 @@ export {
   Node
 } from './bibtex-parser';
 
+// Export document values
+export { collectDocumentValues } from './document-values';
+
 // Export autocompletion components
 export { autocompletion, completionKeymap } from '@codemirror/autocomplete';
