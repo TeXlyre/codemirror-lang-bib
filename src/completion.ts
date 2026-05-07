@@ -191,8 +191,26 @@ function completeFieldValue(
   const fieldName = getEnclosingFieldName(inside, doc);
   if (!fieldName) return null;
 
-  const match = context.matchBefore(/[^"{},=\n]*/);
-  const from = match ? match.from : context.pos;
+  const isPersonField = fieldName === 'author' || fieldName === 'editor';
+
+  let from: number;
+  if (isPersonField) {
+    const valueNode = findAncestorIn(inside, VALUE_NODES);
+    const valueStart = valueNode ? valueNode.from : context.pos;
+    const opener = doc.sliceString(valueStart, valueStart + 1);
+    const innerStart = (opener === '{' || opener === '"') ? valueStart + 1 : valueStart;
+    const typed = doc.sliceString(innerStart, context.pos);
+    const lastAnd = typed.search(/\s+and\s+(?!.*\s+and\s+)/i);
+    if (lastAnd !== -1) {
+      const match = typed.slice(lastAnd).match(/^\s+and\s+/i);
+      from = innerStart + lastAnd + (match ? match[0].length : 0);
+    } else {
+      from = innerStart;
+    }
+  } else {
+    const match = context.matchBefore(/[^"{},=\n]*/);
+    from = match ? match.from : context.pos;
+  }
 
   const docValues = collectDocumentValues(context.state);
   const options: Completion[] = [];
@@ -208,9 +226,11 @@ function completeFieldValue(
     for (const v of docValues[bucket]) add(v, 'text', 2);
   }
 
-  const sameField = docValues.byField.get(fieldName);
-  if (sameField) {
-    for (const v of sameField) add(v, 'text', 1.5);
+  if (!isPersonField) {
+    const sameField = docValues.byField.get(fieldName);
+    if (sameField) {
+      for (const v of sameField) add(v, 'text', 1.5);
+    }
   }
 
   if (fieldName === 'month') {

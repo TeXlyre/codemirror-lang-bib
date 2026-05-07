@@ -4,6 +4,7 @@ import { EditorView } from '@codemirror/view';
 import { Text } from '@codemirror/state';
 import { syntaxTree, ensureSyntaxTree } from '@codemirror/language';
 import { SyntaxNode, Tree } from '@lezer/common';
+import { splitAuthors } from './document-values';
 
 import {
   ignoredFields,
@@ -52,6 +53,25 @@ function reportSyntaxErrors(tree: Tree, diagnostics: Diagnostic[]): void {
       source: 'BibTeX'
     });
   });
+}
+
+function reportDuplicatePersons(field: CollectedField, doc: Text, diagnostics: Diagnostic[]): void {
+  const value = stripBracesAndQuotes(doc.sliceString(field.valueFrom, field.valueTo));
+  const seen = new Set<string>();
+  for (const person of splitAuthors(value)) {
+    const key = person.toLowerCase();
+    if (seen.has(key)) {
+      diagnostics.push({
+        from: field.valueFrom,
+        to: field.valueTo,
+        severity: 'warning',
+        message: `Duplicate name in ${field.name}: ${person}`,
+        source: 'BibTeX'
+      });
+    } else {
+      seen.add(key);
+    }
+  }
 }
 
 export function bibtexLinter(options: BibtexLinterOptions = {}) {
@@ -163,6 +183,10 @@ function checkEntry(
           });
         } else {
           seenFieldNames.set(lower, field.nameFrom);
+        }
+
+        if (lower === 'author' || lower === 'editor') {
+          reportDuplicatePersons(field, doc, diagnostics);
         }
       }
 
