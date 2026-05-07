@@ -100,6 +100,42 @@ function findAncestorIn(node: SyntaxNode, names: Set<string>): SyntaxNode | null
   return null;
 }
 
+function findValueAtom(node: SyntaxNode): SyntaxNode | null {
+  const atomNames = new Set(['BracedValue', 'QuotedValue', 'Number', 'StringRef']);
+  let n: SyntaxNode | null = node;
+  while (n) {
+    if (atomNames.has(n.name)) return n;
+    if (n.name === 'Value' || n.name === 'Field' || n.name === 'Entry') return null;
+    n = n.parent;
+  }
+  return null;
+}
+
+function findLastTopLevelAnd(text: string): number {
+  let depth = 0;
+  let lastEnd = -1;
+  const re = /\\.|\{|\}|\s+and\s+/gs;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) {
+    const tok = m[0];
+    if (tok.startsWith('\\')) continue;
+    if (tok === '{') depth++;
+    else if (tok === '}') depth = Math.max(0, depth - 1);
+    else if (depth === 0) lastEnd = m.index + tok.length;
+  }
+  return lastEnd;
+}
+
+function scanTokenStart(doc: { sliceString(from: number, to: number): string }, lowerBound: number, cursor: number): number {
+  let pos = cursor;
+  while (pos > lowerBound) {
+    const ch = doc.sliceString(pos - 1, pos);
+    if (/[\s,#]/.test(ch)) break;
+    pos--;
+  }
+  return pos;
+}
+
 function getEnclosingFieldName(node: SyntaxNode, doc: { sliceString(from: number, to: number): string }): string | null {
   const field = findAncestor(node, 'Field');
   if (!field) return null;
@@ -192,23 +228,29 @@ function completeFieldValue(
   if (!fieldName) return null;
 
   const isPersonField = fieldName === 'author' || fieldName === 'editor';
+  const atom = findValueAtom(inside);
+
+  if (isPersonField && (!atom || atom.name !== 'BracedValue' && atom.name !== 'QuotedValue')) {
+    return null;
+  }
 
   let from: number;
-  if (isPersonField) {
-    const valueNode = findAncestorIn(inside, VALUE_NODES);
-    const valueStart = valueNode ? valueNode.from : context.pos;
-    const opener = doc.sliceString(valueStart, valueStart + 1);
-    const innerStart = (opener === '{' || opener === '"') ? valueStart + 1 : valueStart;
+  if (isPersonField && atom) {
+    const innerStart = atom.from + 1;
+    const cursorOffset = context.pos - innerStart;
+    if (cursorOffset < 0) return null;
     const typed = doc.sliceString(innerStart, context.pos);
-    const lastAnd = typed.search(/\s+and\s+(?!.*\s+and\s+)/i);
-    if (lastAnd !== -1) {
-      const match = typed.slice(lastAnd).match(/^\s+and\s+/i);
-      from = innerStart + lastAnd + (match ? match[0].length : 0);
-    } else {
-      from = innerStart;
-    }
+    const lastAnd = findLastTopLevelAnd(typed);
+    from = lastAnd === -1 ? innerStart : innerStart + lastAnd;
+  } else if (atom && (atom.name === 'BracedValue' || atom.name === 'QuotedValue')) {
+    const innerStart = atom.from + 1;
+    const innerEnd = atom.to - (doc.sliceString(atom.to - 1, atom.to) === (atom.name === 'BracedValue' ? '}' : '"') ? 1 : 0);
+    const tokenStart = scanTokenStart(doc, innerStart, context.pos);
+    from = Math.max(innerStart, Math.min(tokenStart, innerEnd));
+  } else if (atom) {
+    from = atom.from;
   } else {
-    const match = context.matchBefore(/[^"{},=\n]*/);
+    const match = context.matchBefore(/[A-Za-z0-9_:.\-/]*/);
     from = match ? match.from : context.pos;
   }
 
@@ -244,7 +286,7 @@ function completeFieldValue(
   }
 
   if (options.length === 0) return null;
-  return { from, options, validFor: /^[^"{},=\n]*$/ };
+  return { from, options, validFor: /^[^"{}\n]*$/ };
 }
 
 export function bibtexCompletionSource(context: CompletionContext): CompletionResult | null {
