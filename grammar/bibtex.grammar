@@ -8,11 +8,11 @@ entry {
 }
 
 StringEntry {
-  @specialize<EntryType, "@string"> "{" StringName "=" Value "}"
+  @specialize<EntryType, "@string"> EntryOpen StringName "=" Value EntryClose
 }
 
 PreambleEntry {
-  @specialize<EntryType, "@preamble"> "{" Value "}"
+  @specialize<EntryType, "@preamble"> EntryOpen Value EntryClose
 }
 
 CommentEntry {
@@ -20,12 +20,18 @@ CommentEntry {
 }
 
 @skip {} {
-  commentBlock { "{" CommentBody? "}" }
+  commentBlock { "{" commentContent* "}" }
+  commentContent { BracedValue | Escape | commentText }
+  BracedValue { "{" bracedContent* "}" }
+  QuotedValue { "\"" quotedContent* "\"" }
 }
 
 Entry {
-  EntryType "{" EntryKey ("," Field)* ","? "}"
+  EntryType EntryOpen EntryKey ("," Field)* ","? EntryClose
 }
+
+EntryOpen { "{" | "(" }
+EntryClose { "}" | ")" }
 
 Field {
   FieldName "=" Value
@@ -42,34 +48,33 @@ ValueAtom {
   StringRef
 }
 
-@skip {} {
-  BracedValue { "{" bracedContent* "}" }
-  QuotedValue { "\"" quotedContent* "\"" }
-}
-
 bracedContent { BracedValue | Escape | bracedText }
 quotedContent { BracedValue | Escape | quotedText }
 
-EntryKey { identifier }
-FieldName { identifier }
-StringName { identifier }
-StringRef { identifier }
+EntryKey  { keyIdentifier }
+FieldName { nameIdentifier }
+StringName { nameIdentifier }
+StringRef  { nameIdentifier }
 
 @tokens {
   EntryType { "@" $[a-zA-Z]+ }
 
-  identifier { $[a-zA-Z_] $[a-zA-Z0-9_:./-]* }
+  nameIdentifier { $[a-zA-Z_] $[a-zA-Z0-9_-]* }
+  keyIdentifier  { $[a-zA-Z_] $[a-zA-Z0-9_:./-]* }
 
   Number { $[0-9]+ }
   Concat { "#" }
+
   Escape { "\\" _ }
 
-  bracedText { ![{}\\]+ }
-  quotedText { !["{\\]+ }
-  CommentBody { ![}]+ }
+  bracedText  { ![{}\\]+ }
+  quotedText  { !["{}\\]+ }
+  commentText { ![{}\\]+ }
 
-  Comment { "%" ![\n]* }
-  whitespace { $[ \t\r\n]+ }
+  LineComment { "%" ![\n]* }
+  whitespace  { $[ \t\r\n]+ }
+
+  @precedence { Escape, bracedText, quotedText, commentText }
 }
 
-@skip { whitespace | Comment }
+@skip { whitespace | LineComment }

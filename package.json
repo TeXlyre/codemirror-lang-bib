@@ -1,6 +1,6 @@
 {
   "name": "codemirror-lang-bib",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "BibTeX language support for CodeMirror 6",
   "author": "Fares Abawi <fares@abawi.me> (https://abawi.me)",
   "license": "MIT",
